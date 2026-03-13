@@ -13,7 +13,9 @@
     partnerConfig: { partner_slug: 'digital-genius', partner_name: 'Partner Name' },
     isMasterMode: true,
     realtimeChannel: null,
-    selectedMerchant: null
+    selectedMerchant: null,
+    csvImport: null,
+    csvMapping: {}
   };
 
   // Initialize app
@@ -467,47 +469,179 @@
     
     try {
       const text = await file.text();
-      const lines = text.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const lines = text.split('\n').filter(l => l.trim());
       
-      const merchants = lines.slice(1)
-        .filter(line => line.trim())
-        .map(line => {
-          const values = line.split(',').map(v => v.trim());
-          
-          return {
-            name: values[0] || '',
-            url: values[1] || '',
-            lifecycle_stage: values[2] || 'In Deal Cycle',
-            contact_name: values[3] || '',
-            contact_title: values[4] || '',
-            contact_email: values[5] || '',
-            icp_fit: values[6] || 'Not Sure',
-            ae_email: values[7] || 'drew@shipinsure.io',
-            notes: values[8] || '',
-            source_tab: STATE.currentTab,
-            approved: false,
-            asked_date: null,
-            merchant_yes: false,
-            emailed_date: null
-          };
-        })
-        .filter(m => m.name && m.contact_name);
-      
-      if (merchants.length === 0) {
-        alert('No valid merchants found in CSV');
+      if (lines.length < 2) {
+        alert('CSV file is empty or invalid');
         return;
       }
       
-      await DB.bulkUpsertMerchants(merchants);
-      alert(`Imported ${merchants.length} merchants successfully!`);
-      loadMerchants();
+      // Parse CSV (handle quoted fields)
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+      
+      const headers = parseCSVLine(lines[0]);
+      const rows = lines.slice(1).map(parseCSVLine);
+      
+      // Store parsed data
+      STATE.csvImport = { headers, rows };
+      
+      // Show mapper modal
+      showCSVMapper(headers);
+      
     } catch (err) {
-      console.error('Error importing CSV:', err);
-      alert('Failed to import CSV');
+      console.error('Error reading CSV:', err);
+      alert('Failed to read CSV file');
     }
     
     event.target.value = ''; // Reset file input
+  }
+
+  // Show CSV mapper modal
+  function showCSVMapper(headers) {
+    const fields = [
+      { key: 'name', label: 'Company/Merchant Name', required: true },
+      { key: 'contactName', label: 'Contact Name', required: false },
+      { key: 'contactEmail', label: 'Contact Email', required: false },
+      { key: 'contactTitle', label: 'Contact Title', required: false },
+      { key: 'lifecycleStage', label: 'Lifecycle Stage', required: false },
+      { key: 'icpFit', label: 'ICP Fit', required: false },
+      { key: 'aeEmail', label: 'AE/Owner', required: false },
+      { key: 'optinDate', label: 'Opt-in Date', required: false },
+      { key: 'notes', label: 'Notes', required: false }
+    ];
+    
+    // Auto-detect mappings
+    const mapping = {};
+    const headersLower = headers.map(h => h.toLowerCase().trim());
+    
+    fields.forEach(field => {
+      const patterns = {
+        name: ['company name', 'merchant name', 'company', 'merchant', 'ticket name', 'name'],
+        contactName: ['contact name', 'contact', 'ticket name', 'name'],
+        contactEmail: ['contact email', 'email'],
+        contactTitle: ['contact title', 'title', 'job title'],
+        lifecycleStage: ['lifecycle stage', 'lifecycle', 'stage', 'ticket status', 'status'],
+        icpFit: ['icp fit', 'icp', 'fit'],
+        aeEmail: ['ae owner', 'ae', 'owner', 'ticket owner', 'assigned to'],
+        optinDate: ['opt-in date', 'optin date', 'create date', 'created', 'date'],
+        notes: ['notes', 'description', 'comments']
+      };
+      
+      const matchPatterns = patterns[field.key] || [];
+      const found = headersLower.findIndex(h => 
+        matchPatterns.some(p => h.includes(p) || p.includes(h))
+      );
+      
+      if (found >= 0) mapping[field.key] = found;
+    });
+    
+    STATE.csvMapping = mapping;
+    
+    // Render mapper
+    const container = document.getElementById('csv-mapper-fields');
+    container.innerHTML = fields.map(field => `
+      <div class="mapper-row">
+        <label>${field.label}${field.required ? ' *' : ''}</label>
+        <select class="csv-field-select" data-field="${field.key}">
+          <option value="">-- Skip --</option>
+          ${headers.map((h, i) => `
+            <option value="${i}" ${mapping[field.key] === i ? 'selected' : ''}>${h}</option>
+          `).join('')}
+        </select>
+      </div>
+    `).join('');
+    
+    // Add change listeners
+    container.querySelectorAll('.csv-field-select').forEach(select => {
+      select.addEventListener('change', () => {
+        const field = select.dataset.field;
+        STATE.csvMapping[field] = select.value === '' ? undefined : parseInt(select.value);
+      });
+    });
+    
+    document.getElementById('csv-mapper-modal').style.display = 'flex';
+  }
+
+  // Confirm CSV mapping and import
+  async function confirmCSVMapping() {
+    const { headers, rows } = STATE.csvImport;
+    const mapping = STATE.csvMapping;
+    
+    // Validate required fields
+    if (mapping.name === undefined && mapping.contactName === undefined) {
+      alert('You must map either Company Name or Contact Name');
+      return;
+    }
+    
+    const merchants = [];
+    
+    for (const row of rows) {
+      const getValue = (key) => {
+        const idx = mapping[key];
+        return idx !== undefined ? (row[idx] || '').trim() : '';
+      };
+      
+      // Use company name, or fall back to contact name if no company
+      const companyName = getValue('name') || getValue('contactName') || 'Unknown';
+      const contactName = getValue('contactName') || getValue('name') || '';
+      
+      const merchant = {
+        id: `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: companyName,
+        contact_name: contactName,
+        contact_email: getValue('contactEmail'),
+        contact_title: getValue('contactTitle'),
+        lifecycle_stage: getValue('lifecycleStage') || 'In Deal Cycle',
+        icp_fit: getValue('icpFit') || 'Not Sure',
+        ae_email: getValue('aeEmail') || '',
+        notes: getValue('notes'),
+        source_tab: 'shipinsure-optin',
+        approved: false,
+        asked_date: getValue('optinDate') || null,
+        merchant_yes: false,
+        emailed_date: null,
+        url: '',
+        domain: ''
+      };
+      
+      if (merchant.name) merchants.push(merchant);
+    }
+    
+    if (merchants.length === 0) {
+      alert('No valid merchants found in CSV');
+      return;
+    }
+    
+    try {
+      await DB.bulkUpsertMerchants(merchants);
+      
+      closeModal('csv-mapper-modal');
+      alert(`Imported ${merchants.length} merchants successfully!`);
+      
+      // Reload list
+      await loadMerchants();
+    } catch (err) {
+      console.error('Import error:', err);
+      alert('Failed to import: ' + err.message);
+    }
   }
 
   // Export CSV
@@ -665,6 +799,7 @@
     showAddModal,
     addMerchant,
     handleCSVUpload,
+    confirmCSVMapping,
     exportCSV,
     showBrandingModal,
     handleLogoUpload,
