@@ -346,6 +346,27 @@
     </div>
   </div>
 
+  <!-- CSV Mapper Modal -->
+  <div id="csv-mapper-modal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2>Map CSV Fields</h2>
+        <button class="modal-close" onclick="APP.closeModal('csv-mapper-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 16px; color: #666;">Match your CSV columns to the app fields:</p>
+        <div id="csv-mapper-fields" class="mapper-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="APP.closeModal('csv-mapper-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="APP.confirmCSVMapping()">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          Import Data
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Load scripts -->
   <script src="config.js"></script>
   <script src="db.js"></script>
