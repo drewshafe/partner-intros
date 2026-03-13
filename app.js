@@ -15,7 +15,9 @@
     realtimeChannel: null,
     selectedMerchant: null,
     csvImport: null,
-    csvMapping: {}
+    csvMapping: {},
+    sortColumn: 'name',
+    sortDirection: 'asc'
   };
 
   // Initialize app
@@ -120,22 +122,23 @@
       return;
     }
 
-    tbody.innerHTML = STATE.filteredMerchants.map(m => `
+    tbody.innerHTML = STATE.filteredMerchants.map(m => {
+      const siOptinBadge = m.notes && m.notes.includes('[SI Pre Opt-In]') ? 
+        '<span class="badge badge-purple" style="margin-left: 8px; font-size: 10px;">SI Pre Opt-In</span>' : '';
+      
+      return `
       <tr data-id="${m.id}">
         <td>
-          <a href="${m.url || '#'}" target="_blank" class="merchant-link">${m.name}</a>
+          <a href="${m.url || '#'}" target="_blank" class="merchant-link">${m.name}</a>${siOptinBadge}
         </td>
         <td>
           <div class="contact-name">${m.contact_name || '-'}</div>
           <div class="contact-title">${m.contact_title || ''}</div>
         </td>
         <td>
-          ${STATE.isMasterMode ? `
+          ${canEditLifecycle(m) ? `
             <select class="lifecycle-select" onchange="APP.updateLifecycle('${m.id}', this.value)">
-              <option ${m.lifecycle_stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
-              <option ${m.lifecycle_stage === 'Churned' ? 'selected' : ''}>Churned</option>
-              <option ${m.lifecycle_stage === 'Live ShipInsure Customer' ? 'selected' : ''}>Live ShipInsure Customer</option>
-              <option ${m.lifecycle_stage === 'Live EcoCart Customer' ? 'selected' : ''}>Live EcoCart Customer</option>
+              ${getLifecycleOptions(m)}
             </select>
           ` : `
             <span class="badge badge-${getBadgeClass(m.lifecycle_stage)}">${m.lifecycle_stage}</span>
@@ -164,9 +167,11 @@
           </div>
         </td>
         <td>
-          <button class="btn-small ${m.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${m.id}')">
-            ${m.approved ? 'Approved' : 'Approve'}
-          </button>
+          ${shouldShowApproveButton() ? `
+            <button class="btn-small ${m.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${m.id}')">
+              ${m.approved ? 'Approved' : 'Approve'}
+            </button>
+          ` : '-'}
         </td>
         <td>
           ${getActionButtons(m)}
@@ -177,9 +182,43 @@
 
   // Get action buttons based on workflow state
   function getActionButtons(merchant) {
-    const resetBtn = STATE.isMasterMode ? 
+    const tab = STATE.currentTab;
+    const isMaster = STATE.isMasterMode;
+    
+    // Reset button logic
+    const showReset = isMaster || tab === 'shipinsure-wishlist';
+    const resetBtn = showReset ? 
       `<button class="btn-small btn-outline" onclick="APP.resetWorkflow('${merchant.id}')" style="margin-left: 4px;">Reset</button>` : '';
     
+    // ShipInsure Pre-Opted In (partner view): Only approve
+    if (tab === 'shipinsure-optin' && !isMaster) {
+      return `<button class="btn-small ${merchant.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${merchant.id}')">
+        ${merchant.approved ? 'Approved' : 'Approve'}
+      </button>`;
+    }
+    
+    // Partner Wish List (partner view): Only approve
+    if (tab === 'partner-wishlist' && !isMaster) {
+      return `<button class="btn-small ${merchant.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${merchant.id}')">
+        ${merchant.approved ? 'Approved' : 'Approve'}
+      </button>`;
+    }
+    
+    // ShipInsure Wish List (partner view): Full workflow, NO approve
+    if (tab === 'shipinsure-wishlist' && !isMaster) {
+      if (!merchant.asked_date) {
+        return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
+      }
+      if (merchant.asked_date && !merchant.merchant_yes) {
+        return `<button class="btn-small btn-warning" onclick="APP.markYes('${merchant.id}')">Got Yes</button>${resetBtn}`;
+      }
+      if (merchant.merchant_yes && !merchant.emailed_date) {
+        return `<button class="btn-small btn-primary" onclick="APP.generateEmail('${merchant.id}')">📧 Email</button>${resetBtn}`;
+      }
+      return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
+    }
+    
+    // Master mode: Full workflow + approve
     if (!merchant.asked_date) {
       return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
     }
@@ -192,6 +231,43 @@
     return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
   }
 
+  // Check if lifecycle can be edited
+  function canEditLifecycle(merchant) {
+    const tab = STATE.currentTab;
+    const isMaster = STATE.isMasterMode;
+    
+    // Master can edit everywhere
+    if (isMaster) return true;
+    
+    // Partner can edit on ShipInsure Wish List only
+    if (tab === 'shipinsure-wishlist') return true;
+    
+    return false;
+  }
+
+  // Get lifecycle options based on context
+  function getLifecycleOptions(merchant) {
+    const tab = STATE.currentTab;
+    const stage = merchant.lifecycle_stage;
+    
+    // ShipInsure Wish List: Partner-focused options
+    if (tab === 'shipinsure-wishlist' && !STATE.isMasterMode) {
+      return `
+        <option ${stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
+        <option ${stage === 'Customer' ? 'selected' : ''}>Customer</option>
+        <option ${stage === 'Churned' ? 'selected' : ''}>Churned</option>
+      `;
+    }
+    
+    // Master mode: Full options
+    return `
+      <option ${stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
+      <option ${stage === 'Churned' ? 'selected' : ''}>Churned</option>
+      <option ${stage === 'Live ShipInsure Customer' ? 'selected' : ''}>Live ShipInsure Customer</option>
+      <option ${stage === 'Live EcoCart Customer' ? 'selected' : ''}>Live EcoCart Customer</option>
+    `;
+  }
+
   // Get badge class for lifecycle
   function getBadgeClass(lifecycle) {
     const map = {
@@ -201,6 +277,21 @@
       'Churned': 'secondary'
     };
     return map[lifecycle] || 'secondary';
+  }
+
+  // Check if approve button should show
+  function shouldShowApproveButton() {
+    const tab = STATE.currentTab;
+    const isMaster = STATE.isMasterMode;
+    
+    // Master sees approve everywhere
+    if (isMaster) return true;
+    
+    // Partner does NOT see approve on ShipInsure Wish List
+    if (tab === 'shipinsure-wishlist') return false;
+    
+    // Partner sees approve on other tabs
+    return true;
   }
 
   // Check if ICP can be edited
@@ -255,6 +346,14 @@
     document.getElementById('icp-filter').value = 'All';
     document.getElementById('ae-filter').value = 'All';
     
+    // Control Add Merchant button visibility
+    const addBtn = document.getElementById('add-merchant-btn');
+    if (addBtn) {
+      // Hide on shipinsure-optin for partners
+      const showAdd = STATE.isMasterMode || tab !== 'shipinsure-optin';
+      addBtn.style.display = showAdd ? 'inline-flex' : 'none';
+    }
+    
     // Load merchants for new tab
     loadMerchants();
     
@@ -295,7 +394,60 @@
       return matchesSearch && matchesLifecycle && matchesICP && matchesAE;
     });
     
+    // Apply sorting
+    sortMerchants();
+    
     renderMerchants();
+  }
+
+  // Sort merchants
+  function sortMerchants() {
+    const { sortColumn, sortDirection } = STATE;
+    
+    STATE.filteredMerchants.sort((a, b) => {
+      let aVal = a[sortColumn] || '';
+      let bVal = b[sortColumn] || '';
+      
+      // Handle string comparison
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    updateSortIndicators();
+  }
+
+  // Sort by column
+  function sortBy(column) {
+    if (STATE.sortColumn === column) {
+      // Toggle direction
+      STATE.sortDirection = STATE.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to asc
+      STATE.sortColumn = column;
+      STATE.sortDirection = 'asc';
+    }
+    
+    applyFilters();
+  }
+
+  // Update sort indicators
+  function updateSortIndicators() {
+    // Clear all indicators
+    document.querySelectorAll('.sort-indicator').forEach(el => {
+      el.textContent = '';
+    });
+    
+    // Set active indicator
+    const indicator = document.getElementById(`sort-${STATE.sortColumn}`);
+    if (indicator) {
+      indicator.textContent = STATE.sortDirection === 'asc' ? '↑' : '↓';
+    }
   }
 
   // Handle search
@@ -357,6 +509,45 @@
   async function toggleApproval(id) {
     try {
       const merchant = STATE.merchants.find(m => m.id === id);
+      const tab = STATE.currentTab;
+      const isMaster = STATE.isMasterMode;
+      
+      // Partner approving from ShipInsure Pre-Opted In: Copy to their wishlist
+      if (!isMaster && tab === 'shipinsure-optin') {
+        if (merchant.approved) {
+          alert('Already approved and copied to your wish list');
+          return;
+        }
+        
+        // Create copy in partner wishlist
+        const copy = {
+          name: merchant.name,
+          url: merchant.url,
+          contact_name: merchant.contact_name,
+          contact_title: merchant.contact_title,
+          contact_email: merchant.contact_email,
+          lifecycle_stage: merchant.lifecycle_stage,
+          icp_fit: merchant.icp_fit,
+          ae_email: merchant.ae_email,
+          notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
+          source_tab: 'partner-wishlist',
+          approved: false,
+          asked_date: null,
+          merchant_yes: false,
+          emailed_date: null
+        };
+        
+        await DB.addMerchant(copy);
+        
+        // Mark original as approved
+        await DB.updateMerchant(id, { approved: true });
+        
+        alert('✅ Merchant approved and added to your wish list!');
+        await loadMerchants();
+        return;
+      }
+      
+      // Master or other tabs: Normal toggle
       await DB.updateMerchant(id, { approved: !merchant.approved });
     } catch (err) {
       console.error('Error toggling approval:', err);
@@ -856,6 +1047,7 @@
     switchTab,
     handleSearch,
     applyFilters,
+    sortBy,
     updateICP,
     updateLifecycle,
     resetWorkflow,
