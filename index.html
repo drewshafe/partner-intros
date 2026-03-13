@@ -64,15 +64,15 @@
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/></svg>
           Export CSV
         </button>
-        <button class="btn btn-outline" onclick="document.getElementById('csv-input').click()">
+        <button class="btn btn-outline master-only" onclick="document.getElementById('csv-input').click()">
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
           Import CSV
         </button>
-        <button class="btn btn-outline btn-danger" onclick="APP.clearAllData()" style="border-color: #dc3545; color: #dc3545;">
+        <button class="btn btn-outline btn-danger master-only" onclick="APP.clearAllData()" style="border-color: #dc3545; color: #dc3545;">
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
           Clear All Data
         </button>
-        <button class="btn btn-primary" onclick="APP.showAddModal()">
+        <button class="btn btn-primary" onclick="APP.showAddModal()" id="add-merchant-btn">
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           Add Merchant
         </button>
@@ -144,11 +144,21 @@
     <table class="merchant-table">
       <thead>
         <tr>
-          <th>Merchant</th>
-          <th>Contact</th>
-          <th>Lifecycle</th>
-          <th class="master-only">AE</th>
-          <th>ICP Fit</th>
+          <th class="sortable" onclick="APP.sortBy('name')">
+            Merchant <span class="sort-indicator" id="sort-name"></span>
+          </th>
+          <th class="sortable" onclick="APP.sortBy('contact_name')">
+            Contact <span class="sort-indicator" id="sort-contact_name"></span>
+          </th>
+          <th class="sortable" onclick="APP.sortBy('lifecycle_stage')">
+            Lifecycle <span class="sort-indicator" id="sort-lifecycle_stage"></span>
+          </th>
+          <th class="master-only sortable" onclick="APP.sortBy('ae_email')">
+            AE <span class="sort-indicator" id="sort-ae_email"></span>
+          </th>
+          <th class="sortable" onclick="APP.sortBy('icp_fit')">
+            ICP Fit <span class="sort-indicator" id="sort-icp_fit"></span>
+          </th>
           <th>Workflow</th>
           <th>Approved</th>
           <th>Actions</th>
