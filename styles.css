@@ -340,6 +340,20 @@ body {
   background: white;
 }
 
+.lifecycle-select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lifecycle-select:hover {
+  border-color: #9ca3af;
+}
+
 .workflow-indicators {
   display: flex;
   gap: 8px;
