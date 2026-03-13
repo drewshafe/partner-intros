@@ -101,6 +101,46 @@
       }
     },
 
+    // Clear all merchants and activity logs for a specific tab
+    clearTabData: async (tabName) => {
+      try {
+        // Step 1: Get all merchant IDs for this tab
+        const { data: merchants, error: fetchError } = await sb
+          .from('merchants')
+          .select('id')
+          .eq('source_tab', tabName);
+        
+        if (fetchError) throw fetchError;
+        
+        const merchantIds = merchants.map(m => m.id);
+        
+        if (merchantIds.length === 0) {
+          return { deleted: 0 };
+        }
+        
+        // Step 2: Delete activity logs for these merchants
+        const { error: logError } = await sb
+          .from('activity_log')
+          .delete()
+          .in('merchant_id', merchantIds);
+        
+        if (logError) throw logError;
+        
+        // Step 3: Delete merchants
+        const { error: merchantError } = await sb
+          .from('merchants')
+          .delete()
+          .eq('source_tab', tabName);
+        
+        if (merchantError) throw merchantError;
+        
+        return { deleted: merchants.length };
+      } catch (err) {
+        console.error('Error clearing tab data:', err);
+        throw err;
+      }
+    },
+
     // Bulk upsert merchants (for CSV import)
     bulkUpsertMerchants: async (merchants) => {
       try {
