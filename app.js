@@ -604,7 +604,6 @@
       const contactName = getValue('contactName') || getValue('name') || '';
       
       const merchant = {
-        id: `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: companyName,
         contact_name: contactName,
         contact_email: getValue('contactEmail'),
