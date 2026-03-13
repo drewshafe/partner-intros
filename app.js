@@ -130,7 +130,16 @@
           <div class="contact-title">${m.contact_title || ''}</div>
         </td>
         <td>
-          <span class="badge badge-${getBadgeClass(m.lifecycle_stage)}">${m.lifecycle_stage}</span>
+          ${STATE.isMasterMode ? `
+            <select class="lifecycle-select" onchange="APP.updateLifecycle('${m.id}', this.value)">
+              <option ${m.lifecycle_stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
+              <option ${m.lifecycle_stage === 'Churned' ? 'selected' : ''}>Churned</option>
+              <option ${m.lifecycle_stage === 'Live ShipInsure Customer' ? 'selected' : ''}>Live ShipInsure Customer</option>
+              <option ${m.lifecycle_stage === 'Live EcoCart Customer' ? 'selected' : ''}>Live EcoCart Customer</option>
+            </select>
+          ` : `
+            <span class="badge badge-${getBadgeClass(m.lifecycle_stage)}">${m.lifecycle_stage}</span>
+          `}
         </td>
         <td class="master-only">${(m.ae_email || '').split('@')[0]}</td>
         <td>
@@ -168,23 +177,26 @@
 
   // Get action buttons based on workflow state
   function getActionButtons(merchant) {
+    const resetBtn = STATE.isMasterMode ? 
+      `<button class="btn-small btn-outline" onclick="APP.resetWorkflow('${merchant.id}')" style="margin-left: 4px;">Reset</button>` : '';
+    
     if (!merchant.asked_date) {
-      return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>`;
+      return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
     }
     if (merchant.asked_date && !merchant.merchant_yes) {
-      return `<button class="btn-small btn-warning" onclick="APP.markYes('${merchant.id}')">Got Yes</button>`;
+      return `<button class="btn-small btn-warning" onclick="APP.markYes('${merchant.id}')">Got Yes</button>${resetBtn}`;
     }
     if (merchant.merchant_yes && !merchant.emailed_date) {
-      return `<button class="btn-small btn-primary" onclick="APP.generateEmail('${merchant.id}')">📧 Email</button>`;
+      return `<button class="btn-small btn-primary" onclick="APP.generateEmail('${merchant.id}')">📧 Email</button>${resetBtn}`;
     }
-    return '<span class="workflow-complete">✓ Complete</span>';
+    return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
   }
 
   // Get badge class for lifecycle
   function getBadgeClass(lifecycle) {
     const map = {
       'Live ShipInsure Customer': 'success',
-      'Live Partner Customer': 'purple',
+      'Live EcoCart Customer': 'success',
       'In Deal Cycle': 'info',
       'Churned': 'secondary'
     };
@@ -307,6 +319,37 @@
     } catch (err) {
       console.error('Error updating ICP:', err);
       alert('Failed to update ICP');
+    }
+  }
+
+  // Update lifecycle stage
+  async function updateLifecycle(id, lifecycle) {
+    try {
+      await DB.updateMerchant(id, { lifecycle_stage: lifecycle });
+      console.log('Lifecycle updated');
+    } catch (err) {
+      console.error('Error updating lifecycle:', err);
+      alert('Failed to update lifecycle');
+    }
+  }
+
+  // Reset workflow and approval to defaults
+  async function resetWorkflow(id) {
+    if (!confirm('Reset this merchant\'s workflow and approval status?')) {
+      return;
+    }
+    
+    try {
+      await DB.updateMerchant(id, {
+        approved: false,
+        asked_date: null,
+        merchant_yes: false,
+        emailed_date: null
+      });
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error resetting workflow:', err);
+      alert('Failed to reset workflow');
     }
   }
 
@@ -814,6 +857,8 @@
     handleSearch,
     applyFilters,
     updateICP,
+    updateLifecycle,
+    resetWorkflow,
     toggleApproval,
     markAsked,
     markYes,
