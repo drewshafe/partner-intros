@@ -618,8 +618,7 @@
         asked_date: getValue('optinDate') || null,
         merchant_yes: false,
         emailed_date: null,
-        url: '',
-        domain: ''
+        url: ''
       };
       
       if (merchant.name) merchants.push(merchant);
