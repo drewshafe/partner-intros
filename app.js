@@ -644,6 +644,47 @@
     }
   }
 
+  // Clear all data (delete activity logs first, then merchants)
+  async function clearAllData() {
+    if (!confirm('⚠️ WARNING: This will DELETE ALL merchants, activity logs, and webhook logs across ALL tabs.\n\nThis cannot be undone. Are you sure?')) {
+      return;
+    }
+    
+    try {
+      // Clear in reverse dependency order to avoid foreign key conflicts
+      console.log('Clearing activity logs...');
+      const { error: activityError } = await window.supabase
+        .from('activity_log')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (activityError) throw activityError;
+      
+      console.log('Clearing webhook logs...');
+      const { error: webhookError } = await window.supabase
+        .from('webhook_log')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (webhookError) throw webhookError;
+      
+      console.log('Clearing merchants...');
+      const { error: merchantError } = await window.supabase
+        .from('merchants')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (merchantError) throw merchantError;
+      
+      alert('✅ All data cleared successfully');
+      location.reload();
+      
+    } catch (err) {
+      console.error('Error clearing data:', err);
+      alert('Failed to clear data: ' + err.message);
+    }
+  }
+
   // Export CSV
   function exportCSV() {
     const headers = ['Name', 'URL', 'Lifecycle', 'Contact Name', 'Contact Title', 'Contact Email', 'ICP Fit', 'AE', 'Notes'];
@@ -800,6 +841,7 @@
     addMerchant,
     handleCSVUpload,
     confirmCSVMapping,
+    clearAllData,
     exportCSV,
     showBrandingModal,
     handleLogoUpload,
