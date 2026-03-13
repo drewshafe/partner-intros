@@ -118,7 +118,7 @@
           return { deleted: 0 };
         }
         
-        // Step 2: Delete activity logs for these merchants
+        // Step 2: Delete activity logs
         const { error: logError } = await sb
           .from('activity_log')
           .delete()
@@ -126,7 +126,15 @@
         
         if (logError) throw logError;
         
-        // Step 3: Delete merchants
+        // Step 3: Delete webhook logs
+        const { error: webhookError } = await sb
+          .from('webhook_log')
+          .delete()
+          .in('merchant_id', merchantIds);
+        
+        if (webhookError) throw webhookError;
+        
+        // Step 4: Delete merchants
         const { error: merchantError } = await sb
           .from('merchants')
           .delete()
