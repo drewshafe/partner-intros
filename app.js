@@ -177,7 +177,8 @@
           ${getActionButtons(m)}
         </td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
   }
 
   // Get action buttons based on workflow state
