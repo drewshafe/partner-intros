@@ -101,7 +101,13 @@
     try {
       document.getElementById('merchant-tbody').innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
       
-      const merchants = await DB.getMerchants(STATE.currentTab);
+      let merchants = await DB.getMerchants(STATE.currentTab);
+      
+      // Filter by partner_slug for partner views
+      if (!STATE.isMasterMode && STATE.currentTab === 'partner-wishlist') {
+        merchants = merchants.filter(m => m.partner_slug === STATE.partnerConfig.partner_slug);
+      }
+      
       STATE.merchants = merchants;
       STATE.filteredMerchants = merchants;
       
@@ -181,7 +187,7 @@
     }).join('');
   }
 
-  // Get action buttons based on workflow state
+  // Get action buttons based on workflow state (NO APPROVE BUTTON - that's in Approved column)
   function getActionButtons(merchant) {
     const tab = STATE.currentTab;
     const isMaster = STATE.isMasterMode;
@@ -191,22 +197,18 @@
     const resetBtn = showReset ? 
       `<button class="btn-small btn-outline" onclick="APP.resetWorkflow('${merchant.id}')" style="margin-left: 4px;">Reset</button>` : '';
     
-    // ShipInsure Pre-Opted In (partner view): Only approve
+    // ShipInsure Pre-Opted In (partner view): No workflow actions
     if (tab === 'shipinsure-optin' && !isMaster) {
-      return `<button class="btn-small ${merchant.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${merchant.id}')">
-        ${merchant.approved ? 'Approved' : 'Approve'}
-      </button>`;
+      return '-';
     }
     
-    // Partner Wish List (partner view): Only approve
+    // Partner Wish List (partner view): No workflow actions
     if (tab === 'partner-wishlist' && !isMaster) {
-      return `<button class="btn-small ${merchant.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${merchant.id}')">
-        ${merchant.approved ? 'Approved' : 'Approve'}
-      </button>`;
+      return '-';
     }
     
-    // ShipInsure Wish List (partner view): Full workflow, NO approve
-    if (tab === 'shipinsure-wishlist' && !isMaster) {
+    // ShipInsure Wish List: Full workflow
+    if (tab === 'shipinsure-wishlist') {
       if (!merchant.asked_date) {
         return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
       }
@@ -219,7 +221,7 @@
       return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
     }
     
-    // Master mode: Full workflow + approve
+    // Master mode on other tabs: Full workflow
     if (!merchant.asked_date) {
       return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
     }
@@ -520,7 +522,7 @@
           return;
         }
         
-        // Create copy in partner wishlist
+        // Create copy in partner wishlist WITH partner_slug
         const copy = {
           name: merchant.name,
           url: merchant.url,
@@ -532,6 +534,7 @@
           ae_email: merchant.ae_email,
           notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
           source_tab: 'partner-wishlist',
+          partner_slug: STATE.partnerConfig.partner_slug,
           approved: false,
           asked_date: null,
           merchant_yes: false,
@@ -686,6 +689,11 @@
       merchant_yes: false,
       emailed_date: null
     };
+    
+    // Set partner_slug for partner-wishlist
+    if (STATE.currentTab === 'partner-wishlist') {
+      merchant.partner_slug = STATE.partnerConfig.partner_slug;
+    }
     
     try {
       await DB.addMerchant(merchant);
@@ -854,6 +862,8 @@
         emailed_date: null,
         url: ''
       };
+      
+      // Don't set partner_slug for shipinsure-optin imports
       
       if (merchant.name) merchants.push(merchant);
     }
