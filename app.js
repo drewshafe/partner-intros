@@ -522,7 +522,7 @@
           return;
         }
         
-        // Create copy in partner wishlist WITH partner_slug
+        // Create copy in partner wishlist WITH partner_slug and approved=true
         const copy = {
           name: merchant.name,
           url: merchant.url,
@@ -535,7 +535,7 @@
           notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
           source_tab: 'partner-wishlist',
           partner_slug: STATE.partnerConfig.partner_slug,
-          approved: false,
+          approved: true,
           asked_date: null,
           merchant_yes: false,
           emailed_date: null
