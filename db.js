@@ -1,331 +1,213 @@
-// Database Layer - Supabase Client
-// Pattern matches tradeshow-tracker/db.js
+// Database layer - Supabase client and all DB operations
+// Partner Intros - follows tradeshow-tracker patterns
 
-(function() {
+const DB = (function() {
   'use strict';
 
-  const SUPABASE_URL = CONFIG.supabaseUrl;
-  const SUPABASE_ANON_KEY = CONFIG.supabaseAnonKey;
-  
-  // Initialize Supabase client (scoped inside IIFE)
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Supabase client
+  const supabaseUrl = 'https://yquqoutrnqtietntxhan.supabase.co';
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdXFvdXRybnF0aWV0bnR4aGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4ODEyNzQsImV4cCI6MjA1MjQ1NzI3NH0.XS8vY3hQqMZO9l0O_JcGVYwHLslNWXIhJs85yT2paIE';
+  const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  // Expose DB operations globally
-  window.DB = {
+  // Get partner configuration
+  async function getPartnerConfig(slug) {
+    const { data, error } = await supabase
+      .from('partner_config')
+      .select('*')
+      .eq('partner_slug', slug)
+      .single();
     
-    // ============ MERCHANTS ============
-    
-    // Get all merchants by source tab
-    getMerchants: async (sourceTab) => {
-      try {
-        const { data, error } = await sb
-          .from('merchants')
-          .select('*')
-          .eq('source_tab', sourceTab)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        return data || [];
-      } catch (err) {
-        console.error('Error fetching merchants:', err);
-        return [];
-      }
-    },
-
-    // Search merchants (like tracker's company search)
-    searchMerchants: async (query, sourceTab) => {
-      try {
-        const { data, error } = await sb
-          .from('merchants')
-          .select('*')
-          .eq('source_tab', sourceTab)
-          .or(`name.ilike.%${query}%,contact_name.ilike.%${query}%,contact_email.ilike.%${query}%`)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        return data || [];
-      } catch (err) {
-        console.error('Error searching merchants:', err);
-        return [];
-      }
-    },
-
-    // Add merchant
-    addMerchant: async (merchant) => {
-      try {
-        const { data, error } = await sb
-          .from('merchants')
-          .insert([merchant])
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error adding merchant:', err);
-        throw err;
-      }
-    },
-
-    // Update merchant
-    updateMerchant: async (id, updates) => {
-      try {
-        const { data, error } = await sb
-          .from('merchants')
-          .update(updates)
-          .eq('id', id)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error updating merchant:', err);
-        throw err;
-      }
-    },
-
-    // Delete merchant
-    deleteMerchant: async (id) => {
-      try {
-        const { error } = await sb
-          .from('merchants')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        return true;
-      } catch (err) {
-        console.error('Error deleting merchant:', err);
-        throw err;
-      }
-    },
-
-    // Clear all merchants and activity logs for a specific tab
-    clearTabData: async (tabName) => {
-      try {
-        // Step 1: Get all merchant IDs for this tab
-        const { data: merchants, error: fetchError } = await sb
-          .from('merchants')
-          .select('id')
-          .eq('source_tab', tabName);
-        
-        if (fetchError) throw fetchError;
-        
-        const merchantIds = merchants.map(m => m.id);
-        
-        if (merchantIds.length === 0) {
-          return { deleted: 0 };
-        }
-        
-        // Step 2: Delete activity logs
-        const { error: logError } = await sb
-          .from('activity_log')
-          .delete()
-          .in('merchant_id', merchantIds);
-        
-        if (logError) throw logError;
-        
-        // Step 3: Delete webhook logs
-        const { error: webhookError } = await sb
-          .from('webhook_log')
-          .delete()
-          .in('merchant_id', merchantIds);
-        
-        if (webhookError) throw webhookError;
-        
-        // Step 4: Delete merchants
-        const { error: merchantError } = await sb
-          .from('merchants')
-          .delete()
-          .eq('source_tab', tabName);
-        
-        if (merchantError) throw merchantError;
-        
-        return { deleted: merchants.length };
-      } catch (err) {
-        console.error('Error clearing tab data:', err);
-        throw err;
-      }
-    },
-
-    // Bulk upsert merchants (for CSV import)
-    bulkUpsertMerchants: async (merchants) => {
-      try {
-        const { data, error } = await sb
-          .from('merchants')
-          .upsert(merchants, { onConflict: 'hubspot_id', ignoreDuplicates: false })
-          .select();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error bulk upserting merchants:', err);
-        throw err;
-      }
-    },
-
-    // Get dashboard stats
-    getStats: async (sourceTab) => {
-      try {
-        const { data, error } = await sb
-          .from('dashboard_stats')
-          .select('*')
-          .eq('source_tab', sourceTab)
-          .single();
-        
-        if (error) throw error;
-        return data || { total: 0, approved: 0, asked: 0, yes_received: 0, emailed: 0 };
-      } catch (err) {
-        console.error('Error fetching stats:', err);
-        return { total: 0, approved: 0, asked: 0, yes_received: 0, emailed: 0 };
-      }
-    },
-
-    // ============ EMAIL TEMPLATES ============
-    
-    // Get template
-    getTemplate: async (templateType) => {
-      try {
-        const { data, error } = await sb
-          .from('email_templates')
-          .select('*')
-          .eq('template_type', templateType)
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error fetching template:', err);
-        return null;
-      }
-    },
-
-    // Update template
-    updateTemplate: async (templateType, updates) => {
-      try {
-        const { data, error } = await sb
-          .from('email_templates')
-          .update(updates)
-          .eq('template_type', templateType)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error updating template:', err);
-        throw err;
-      }
-    },
-
-    // ============ PARTNER CONFIG ============
-    
-    // Get partner config
-    getPartnerConfig: async (partnerSlug) => {
-      try {
-        const { data, error } = await sb
-          .from('partner_config')
-          .select('*')
-          .eq('partner_slug', partnerSlug)
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error fetching partner config:', err);
-        return null;
-      }
-    },
-
-    // Update partner config
-    updatePartnerConfig: async (partnerSlug, updates) => {
-      try {
-        const { data, error } = await sb
-          .from('partner_config')
-          .upsert(
-            { partner_slug: partnerSlug, ...updates },
-            { onConflict: 'partner_slug' }
-          )
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        console.error('Error updating partner config:', err);
-        throw err;
-      }
-    },
-
-    // ============ ACTIVITY LOG ============
-    
-    // Get recent activity
-    getRecentActivity: async (limit = 50) => {
-      try {
-        const { data, error } = await sb
-          .from('recent_activity')
-          .select('*')
-          .limit(limit);
-        
-        if (error) throw error;
-        return data || [];
-      } catch (err) {
-        console.error('Error fetching activity:', err);
-        return [];
-      }
-    },
-
-    // ============ REAL-TIME SUBSCRIPTIONS ============
-    
-    // Subscribe to merchant changes (like tracker's booth updates)
-    subscribeMerchants: (sourceTab, callback) => {
-      const channel = sb
-        .channel(`merchants:${sourceTab}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'merchants',
-            filter: `source_tab=eq.${sourceTab}`
-          },
-          (payload) => {
-            console.log('Merchant change detected:', payload);
-            callback(payload);
-          }
-        )
-        .subscribe();
-
-      return channel;
-    },
-
-    // Unsubscribe from channel
-    unsubscribe: (channel) => {
-      if (channel) {
-        sb.removeChannel(channel);
-      }
-    },
-
-    // ============ WEBHOOK LOG ============
-    
-    // Get webhook logs (for debugging)
-    getWebhookLogs: async (limit = 100) => {
-      try {
-        const { data, error } = await sb
-          .from('webhook_log')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(limit);
-        
-        if (error) throw error;
-        return data || [];
-      } catch (err) {
-        console.error('Error fetching webhook logs:', err);
-        return [];
-      }
+    if (error) {
+      console.error('Error fetching partner config:', error);
+      return null;
     }
-  };
+    return data;
+  }
 
-  console.log('Database layer initialized');
+  // Get all partner configs (for admin partner selector)
+  async function getAllPartnerConfigs() {
+    const { data, error } = await supabase
+      .from('partner_config')
+      .select('*')
+      .order('partner_name');
+    
+    if (error) throw error;
+    return data || [];
+  }
+
+  // Update partner configuration
+  async function updatePartnerConfig(slug, updates) {
+    const { data, error } = await supabase
+      .from('partner_config')
+      .update(updates)
+      .eq('partner_slug', slug);
+    
+    if (error) throw error;
+    return data;
+  }
+
+  // Get email template
+  async function getTemplate(tab) {
+    const { data, error } = await supabase
+      .from('email_templates')
+      .select('*')
+      .eq('tab', tab)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching template:', error);
+      return { subject: '', body: '' };
+    }
+    return data;
+  }
+
+  // Update email template
+  async function updateTemplate(tab, updates) {
+    const { data, error } = await supabase
+      .from('email_templates')
+      .upsert({ tab, ...updates }, { onConflict: 'tab' });
+    
+    if (error) throw error;
+    return data;
+  }
+
+  // Get merchants for a specific tab
+  async function getMerchants(tab) {
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('*')
+      .eq('source_tab', tab)
+      .order('name');
+    
+    if (error) {
+      console.error('Error fetching merchants:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // Add merchant
+  async function addMerchant(merchant) {
+    const { data, error } = await supabase
+      .from('merchants')
+      .insert([merchant])
+      .select();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  // Update merchant
+  async function updateMerchant(id, updates) {
+    const { data, error } = await supabase
+      .from('merchants')
+      .update(updates)
+      .eq('id', id);
+    
+    if (error) throw error;
+    return data;
+  }
+
+  // Delete merchant
+  async function deleteMerchant(id) {
+    const { error } = await supabase
+      .from('merchants')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  }
+
+  // Bulk upsert merchants (for CSV import)
+  async function bulkUpsertMerchants(merchants) {
+    const { data, error } = await supabase
+      .from('merchants')
+      .upsert(merchants, { 
+        onConflict: 'name,contact_email',
+        ignoreDuplicates: false 
+      });
+    
+    if (error) throw error;
+    return data;
+  }
+
+  // Get stats for a tab
+  async function getStats(tab) {
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('*')
+      .eq('source_tab', tab);
+    
+    if (error) {
+      console.error('Error fetching stats:', error);
+      return { total: 0, approved: 0, asked: 0, yes_received: 0, emailed: 0 };
+    }
+    
+    const merchants = data || [];
+    return {
+      total: merchants.length,
+      approved: merchants.filter(m => m.approved).length,
+      asked: merchants.filter(m => m.asked_date).length,
+      yes_received: merchants.filter(m => m.merchant_yes).length,
+      emailed: merchants.filter(m => m.emailed_date).length
+    };
+  }
+
+  // Clear all data for a tab
+  async function clearTabData(tab) {
+    // Delete merchants for this tab
+    const { error } = await supabase
+      .from('merchants')
+      .delete()
+      .eq('source_tab', tab);
+    
+    if (error) throw error;
+    
+    // Return count (we don't have it, so just return success)
+    return { deleted: 1 };
+  }
+
+  // Subscribe to merchant changes
+  function subscribeMerchants(tab, callback) {
+    const channel = supabase
+      .channel(`merchants-${tab}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'merchants',
+          filter: `source_tab=eq.${tab}`
+        },
+        callback
+      )
+      .subscribe();
+    
+    return channel;
+  }
+
+  // Unsubscribe from channel
+  function unsubscribe(channel) {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  }
+
+  // Public API
+  return {
+    getPartnerConfig,
+    getAllPartnerConfigs,
+    updatePartnerConfig,
+    getTemplate,
+    updateTemplate,
+    getMerchants,
+    addMerchant,
+    updateMerchant,
+    deleteMerchant,
+    bulkUpsertMerchants,
+    getStats,
+    clearTabData,
+    subscribeMerchants,
+    unsubscribe
+  };
 })();
