@@ -6,7 +6,7 @@ const DB = (function() {
 
   // Supabase client
   const supabaseUrl = 'https://yquqoutrnqtietntxhan.supabase.co';
-  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdXFvdXRybnF0aWV0bnR4aGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4ODEyNzQsImV4cCI6MjA1MjQ1NzI3NH0.XS8vY3hQqMZO9l0O_JcGVYwHLslNWXIhJs85yT2paIE';
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdXFvdXRybnF0aWV0bnR4aGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNjg1NDEsImV4cCI6MjA4ODg0NDU0MX0.qMKkxYtrOHQt7Wr2Iq2NYdxP0cuQNGabcoq3RPrtWyM';
   const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
   // Get partner configuration
