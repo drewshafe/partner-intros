@@ -108,6 +108,11 @@
         merchants = merchants.filter(m => m.partner_slug === STATE.partnerConfig.partner_slug);
       }
       
+      // Hide approved merchants from partner's Pre-Opted In view
+      if (!STATE.isMasterMode && STATE.currentTab === 'shipinsure-optin') {
+        merchants = merchants.filter(m => !m.approved);
+      }
+      
       STATE.merchants = merchants;
       STATE.filteredMerchants = merchants;
       
@@ -160,17 +165,7 @@
           </select>
         </td>
         <td>
-          <div class="workflow-indicators">
-            <div class="workflow-step ${m.asked_date ? 'active' : ''}">
-              ${m.asked_date ? '✓' : '○'} Asked
-            </div>
-            <div class="workflow-step ${m.merchant_yes ? 'active' : ''}">
-              ${m.merchant_yes ? '✓' : '○'} Yes
-            </div>
-            <div class="workflow-step ${m.emailed_date ? 'active' : ''}">
-              ${m.emailed_date ? '✓' : '○'} Sent
-            </div>
-          </div>
+          ${getWorkflowDisplay(m)}
         </td>
         <td>
           ${shouldShowApproveButton() ? `
@@ -187,7 +182,43 @@
     }).join('');
   }
 
-  // Get action buttons based on workflow state (NO APPROVE BUTTON - that's in Approved column)
+  // Get workflow display (different for partner wishlist)
+  function getWorkflowDisplay(merchant) {
+    const tab = STATE.currentTab;
+    const isMaster = STATE.isMasterMode;
+    
+    // Partner Wish List: Show partner_status dropdown
+    if (tab === 'partner-wishlist' && !isMaster) {
+      return `
+        <select class="lifecycle-select" onchange="APP.updatePartnerStatus('${merchant.id}', this.value)">
+          <option value="" ${!merchant.partner_status ? 'selected' : ''}>- Select -</option>
+          <option ${merchant.partner_status === 'Intro Made' ? 'selected' : ''}>Intro Made</option>
+          <option ${merchant.partner_status === 'Prospect = Yes' ? 'selected' : ''}>Prospect = Yes</option>
+          <option ${merchant.partner_status === 'Prospect = No' ? 'selected' : ''}>Prospect = No</option>
+          <option ${merchant.partner_status === 'Meeting Scheduled' ? 'selected' : ''}>Meeting Scheduled</option>
+          <option ${merchant.partner_status === 'Demo Met' ? 'selected' : ''}>Demo Met</option>
+          <option ${merchant.partner_status === 'Gift Card Sent' ? 'selected' : ''}>Gift Card Sent</option>
+        </select>
+      `;
+    }
+    
+    // Otherwise: Standard workflow indicators
+    return `
+      <div class="workflow-indicators">
+        <div class="workflow-step ${merchant.asked_date ? 'active' : ''}">
+          ${merchant.asked_date ? '✓' : '○'} Asked
+        </div>
+        <div class="workflow-step ${merchant.merchant_yes ? 'active' : ''}">
+          ${merchant.merchant_yes ? '✓' : '○'} Yes
+        </div>
+        <div class="workflow-step ${merchant.emailed_date ? 'active' : ''}">
+          ${merchant.emailed_date ? '✓' : '○'} Sent
+        </div>
+      </div>
+    `;
+  }
+
+  // Get action buttons based on workflow state
   function getActionButtons(merchant) {
     const tab = STATE.currentTab;
     const isMaster = STATE.isMasterMode;
@@ -197,12 +228,12 @@
     const resetBtn = showReset ? 
       `<button class="btn-small btn-outline" onclick="APP.resetWorkflow('${merchant.id}')" style="margin-left: 4px;">Reset</button>` : '';
     
-    // ShipInsure Pre-Opted In (partner view): No workflow actions
+    // ShipInsure Pre-Opted In (partner view): Disqualify button only
     if (tab === 'shipinsure-optin' && !isMaster) {
-      return '-';
+      return `<button class="btn-small btn-outline" onclick="APP.disqualifyMerchant('${merchant.id}')">Disqualify</button>`;
     }
     
-    // Partner Wish List (partner view): No workflow actions
+    // Partner Wish List (partner view): No action buttons (dropdown handles it)
     if (tab === 'partner-wishlist' && !isMaster) {
       return '-';
     }
@@ -301,6 +332,7 @@
   function canEditICP() {
     if (STATE.isMasterMode) return true;
     if (STATE.currentTab === 'shipinsure-optin') return true;
+    if (STATE.currentTab === 'partner-wishlist') return true;
     return false;
   }
 
@@ -488,6 +520,35 @@
     }
   }
 
+  // Update partner status
+  async function updatePartnerStatus(id, status) {
+    try {
+      await DB.updateMerchant(id, { partner_status: status });
+      console.log('Partner status updated');
+    } catch (err) {
+      console.error('Error updating partner status:', err);
+      alert('Failed to update partner status');
+    }
+  }
+
+  // Disqualify merchant
+  async function disqualifyMerchant(id) {
+    if (!confirm('Disqualify this merchant? This will mark them as not a fit.')) {
+      return;
+    }
+    
+    try {
+      await DB.updateMerchant(id, { 
+        icp_fit: 'ICP 3 (Not a Fit)',
+        approved: false
+      });
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error disqualifying merchant:', err);
+      alert('Failed to disqualify merchant');
+    }
+  }
+
   // Reset workflow and approval to defaults
   async function resetWorkflow(id) {
     if (!confirm('Reset this merchant\'s workflow and approval status?')) {
@@ -499,7 +560,8 @@
         approved: false,
         asked_date: null,
         merchant_yes: false,
-        emailed_date: null
+        emailed_date: null,
+        partner_status: null
       });
       await loadMerchants();
     } catch (err) {
@@ -536,6 +598,7 @@
           source_tab: 'partner-wishlist',
           partner_slug: STATE.partnerConfig.partner_slug,
           approved: true,
+          partner_status: null,
           asked_date: null,
           merchant_yes: false,
           emailed_date: null
@@ -543,7 +606,7 @@
         
         await DB.addMerchant(copy);
         
-        // Mark original as approved
+        // Mark original as approved (will hide from partner's Pre-Opted In view)
         await DB.updateMerchant(id, { approved: true });
         
         alert('✅ Merchant approved and added to your wish list!');
@@ -685,6 +748,7 @@
       notes: document.getElementById('new-notes').value.trim(),
       source_tab: STATE.currentTab,
       approved: false,
+      partner_status: null,
       asked_date: null,
       merchant_yes: false,
       emailed_date: null
@@ -857,6 +921,7 @@
         notes: getValue('notes'),
         source_tab: 'shipinsure-optin',
         approved: false,
+        partner_status: null,
         asked_date: getValue('optinDate') || null,
         merchant_yes: false,
         emailed_date: null,
@@ -1061,6 +1126,8 @@
     sortBy,
     updateICP,
     updateLifecycle,
+    updatePartnerStatus,
+    disqualifyMerchant,
     resetWorkflow,
     toggleApproval,
     markAsked,
