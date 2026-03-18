@@ -71,8 +71,15 @@
       return;
     }
     
-    // No valid auth - redirect to partner mode or show error
-    alert('Access denied. Please use a valid partner link.');
+    // No params - prompt for master code
+    const code = prompt('Enter master access code:');
+    if (code === '4224') {
+      window.location.href = '?master=4224';
+    } else {
+      alert('Invalid code');
+      document.body.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;"><h1>Access Denied</h1></div>';
+      throw new Error('Invalid authentication');
+    }
   }
 
   // Load partner configuration
