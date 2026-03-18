@@ -24,6 +24,9 @@
   async function init() {
     console.log('Initializing Partner Intros app...');
     
+    // Check authentication
+    checkAuthentication();
+    
     // Load partner config
     await loadPartnerConfig();
     
@@ -39,23 +42,38 @@
     // Populate AE filter
     populateAEFilter();
     
-    // Check URL params for partner mode
-    checkPartnerMode();
+    // Populate partner selector
+    if (STATE.isMasterMode) {
+      await populatePartnerSelector();
+    }
     
     console.log('App initialized');
   }
 
-  // Check URL for partner parameter
-  function checkPartnerMode() {
+  // Check authentication and mode
+  function checkAuthentication() {
     const urlParams = new URLSearchParams(window.location.search);
+    const masterPassword = urlParams.get('master');
     const partnerSlug = urlParams.get('partner');
     
+    // Master mode with password
+    if (masterPassword === '4224') {
+      STATE.isMasterMode = true;
+      return;
+    }
+    
+    // Partner mode
     if (partnerSlug) {
       STATE.isMasterMode = false;
       loadPartnerConfig(partnerSlug);
       document.getElementById('master-controls').style.display = 'none';
       document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
+      return;
     }
+    
+    // No valid auth - redirect to partner mode or show error
+    alert('Access denied. Please use a valid partner link.');
+    // Optionally redirect to a default partner or error page
   }
 
   // Load partner configuration
@@ -76,6 +94,32 @@
       }
     } catch (err) {
       console.error('Error loading partner config:', err);
+    }
+  }
+
+  // Populate partner selector dropdown
+  async function populatePartnerSelector() {
+    try {
+      const partners = await DB.getAllPartnerConfigs();
+      const select = document.getElementById('partner-selector');
+      
+      if (!select) {
+        console.warn('Partner selector not found in DOM');
+        return;
+      }
+      
+      select.innerHTML = '<option value="">-- Select Partner --</option>' +
+        partners.map(p => `<option value="${p.partner_slug}" ${p.partner_slug === STATE.partnerConfig.partner_slug ? 'selected' : ''}>${p.partner_name}</option>`).join('');
+      
+      select.addEventListener('change', async (e) => {
+        const slug = e.target.value;
+        if (slug) {
+          await loadPartnerConfig(slug);
+          await loadMerchants();
+        }
+      });
+    } catch (err) {
+      console.error('Error populating partner selector:', err);
     }
   }
 
@@ -503,6 +547,7 @@
     try {
       await DB.updateMerchant(id, { icp_fit: icp });
       console.log('ICP updated');
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error updating ICP:', err);
       alert('Failed to update ICP');
@@ -514,6 +559,7 @@
     try {
       await DB.updateMerchant(id, { lifecycle_stage: lifecycle });
       console.log('Lifecycle updated');
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error updating lifecycle:', err);
       alert('Failed to update lifecycle');
@@ -525,6 +571,7 @@
     try {
       await DB.updateMerchant(id, { partner_status: status });
       console.log('Partner status updated');
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error updating partner status:', err);
       alert('Failed to update partner status');
@@ -542,7 +589,7 @@
         icp_fit: 'ICP 3 (Not a Fit)',
         approved: false
       });
-      await loadMerchants();
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error disqualifying merchant:', err);
       alert('Failed to disqualify merchant');
@@ -563,7 +610,7 @@
         emailed_date: null,
         partner_status: null
       });
-      await loadMerchants();
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error resetting workflow:', err);
       alert('Failed to reset workflow');
@@ -610,12 +657,13 @@
         await DB.updateMerchant(id, { approved: true });
         
         alert('✅ Merchant approved and added to your wish list!');
-        await loadMerchants();
+        await loadMerchants(); // Refresh UI immediately
         return;
       }
       
       // Master or other tabs: Normal toggle
       await DB.updateMerchant(id, { approved: !merchant.approved });
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error toggling approval:', err);
       alert('Failed to update approval');
@@ -627,6 +675,7 @@
     try {
       const today = new Date().toISOString().split('T')[0];
       await DB.updateMerchant(id, { asked_date: today });
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error marking as asked:', err);
       alert('Failed to update');
@@ -637,6 +686,7 @@
   async function markYes(id) {
     try {
       await DB.updateMerchant(id, { merchant_yes: true });
+      await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error marking yes:', err);
       alert('Failed to update');
@@ -704,6 +754,7 @@
         const today = new Date().toISOString().split('T')[0];
         await DB.updateMerchant(STATE.selectedMerchant.id, { emailed_date: today });
         closeModal('email-modal');
+        await loadMerchants(); // Refresh UI immediately
       } catch (err) {
         console.error('Error marking as emailed:', err);
       }
