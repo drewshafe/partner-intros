@@ -86,6 +86,40 @@ const DB = (function() {
     return data || [];
   }
 
+  // Check if partner approved a merchant
+  async function isApprovedByPartner(merchantId, partnerSlug) {
+    const { data, error } = await supabase
+      .from('partner_approvals')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('partner_slug', partnerSlug)
+      .single();
+    
+    if (error) return false;
+    return !!data;
+  }
+
+  // Get all approvals for a partner
+  async function getPartnerApprovals(partnerSlug) {
+    const { data, error } = await supabase
+      .from('partner_approvals')
+      .select('merchant_id')
+      .eq('partner_slug', partnerSlug);
+    
+    if (error) return [];
+    return data.map(a => a.merchant_id);
+  }
+
+  // Add partner approval
+  async function addPartnerApproval(merchantId, partnerSlug) {
+    const { data, error } = await supabase
+      .from('partner_approvals')
+      .insert([{ merchant_id: merchantId, partner_slug: partnerSlug }]);
+    
+    if (error) throw error;
+    return data;
+  }
+
   // Add merchant
   async function addMerchant(merchant) {
     const { data, error } = await supabase
@@ -201,6 +235,9 @@ const DB = (function() {
     getTemplate,
     updateTemplate,
     getMerchants,
+    isApprovedByPartner,
+    getPartnerApprovals,
+    addPartnerApproval,
     addMerchant,
     updateMerchant,
     deleteMerchant,
