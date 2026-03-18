@@ -3,43 +3,582 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ShipInsure Partner Lead Intros</title>
-  <link rel="stylesheet" href="styles.css">
-  
-  <!-- Supabase JS Client -->
+  <title>ShipInsure × Partner - Lead Introduction Platform</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo-container {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    #partner-logo {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: white;
+      padding: 8px;
+      display: none;
+    }
+
+    #logo-placeholder {
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+
+    .header-text h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .header-text p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    #master-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    #master-controls > div {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #master-controls label {
+      font-weight: 500;
+      color: white;
+      font-size: 14px;
+    }
+
+    #partner-selector {
+      padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 4px;
+      font-size: 14px;
+      background: rgba(255,255,255,0.95);
+      color: #333;
+      min-width: 200px;
+    }
+
+    .tabs {
+      display: flex;
+      background: #f8f9fa;
+      border-bottom: 2px solid #e9ecef;
+    }
+
+    .tab {
+      padding: 16px 24px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 15px;
+      font-weight: 500;
+      color: #6c757d;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+
+    .tab:hover {
+      background: rgba(102, 126, 234, 0.05);
+      color: #495057;
+    }
+
+    .tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      background: white;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .section-header {
+      margin-bottom: 24px;
+    }
+
+    .section-header h2 {
+      font-size: 24px;
+      color: #212529;
+      margin-bottom: 8px;
+    }
+
+    .section-header p {
+      color: #6c757d;
+      font-size: 14px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .stat-card h3 {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.9;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-card .number {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls input {
+      padding: 10px 16px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 14px;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .controls select {
+      padding: 10px 16px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .btn-outline {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-outline:hover {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn-info {
+      background: #17a2b8;
+      color: white;
+    }
+
+    .btn-warning {
+      background: #ffc107;
+      color: #212529;
+    }
+
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    thead {
+      background: #f8f9fa;
+    }
+
+    th {
+      padding: 14px;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover {
+      background: #e9ecef;
+    }
+
+    td {
+      padding: 16px 14px;
+      border-top: 1px solid #f1f3f5;
+      font-size: 14px;
+      color: #495057;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .merchant-link {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .merchant-link:hover {
+      text-decoration: underline;
+    }
+
+    .contact-name {
+      font-weight: 500;
+      color: #212529;
+    }
+
+    .contact-title {
+      font-size: 12px;
+      color: #6c757d;
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .badge-secondary {
+      background: #e2e3e5;
+      color: #383d41;
+    }
+
+    .badge-purple {
+      background: #e7d4f5;
+      color: #6f42c1;
+    }
+
+    .lifecycle-select, .icp-select {
+      padding: 6px 10px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .workflow-indicators {
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .workflow-step {
+      color: #adb5bd;
+    }
+
+    .workflow-step.active {
+      color: #28a745;
+      font-weight: 500;
+    }
+
+    .workflow-complete {
+      color: #28a745;
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .loading, .empty, .error {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+      font-size: 14px;
+    }
+
+    .error {
+      color: #dc3545;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      font-size: 20px;
+      color: #212529;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      color: #adb5bd;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close-btn:hover {
+      color: #495057;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #495057;
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-group textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .email-preview {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .email-preview h4 {
+      font-size: 14px;
+      color: #6c757d;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .email-preview p {
+      margin-bottom: 0;
+      color: #212529;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .master-only {
+      /* Will be hidden for partner mode via JS */
+    }
+
+    .sort-indicator {
+      display: inline-block;
+      width: 12px;
+      margin-left: 4px;
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .mapper-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .csv-field-select {
+      padding: 8px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #logo-preview {
+      display: none;
+      margin-top: 12px;
+    }
+
+    #logo-preview-img {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 8px;
+      border: 2px solid #dee2e6;
+    }
+  </style>
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="header-content">
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
       <div class="header-left">
-        <img id="partner-logo" class="partner-logo" src="" alt="Partner Logo" style="display: none;">
-        <div class="header-logo-placeholder" id="logo-placeholder">
-          <span>Partner Logo</span>
+        <div class="logo-container">
+          <img id="partner-logo" src="" alt="Partner Logo">
+          <div id="logo-placeholder">🤝</div>
         </div>
-        <div class="header-divider"></div>
-        <div class="header-title">
+        <div class="header-text">
           <h1>ShipInsure × <span id="partner-name">Partner Name</span></h1>
           <p>Partner Lead Introduction Platform</p>
         </div>
       </div>
-      <div class="header-right" id="master-controls">
-        <button class="btn btn-secondary" onclick="APP.showBrandingModal()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-          Branding
-        </button>
-        <button class="btn btn-secondary" onclick="APP.showTemplateEditor()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-          Templates
-        </button>
+      
+      <div id="master-controls" style="display: flex; align-items: center; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label for="partner-selector">Partner:</label>
+          <select id="partner-selector">
+            <!-- Populated by populatePartnerSelector() -->
+          </select>
+        </div>
+        
+        <button onclick="APP.showBrandingModal()" class="btn-outline" style="color: white; border-color: white;">⚙️ Branding</button>
+        <button onclick="APP.showTemplateEditor()" class="btn-outline" style="color: white; border-color: white;">✉️ Templates</button>
+        <input type="file" id="csv-upload" accept=".csv" onchange="APP.handleCSVUpload(event)" style="display: none;">
+        <button onclick="document.getElementById('csv-upload').click()" class="btn-outline" style="color: white; border-color: white;">📥 Import CSV</button>
+        <button onclick="APP.clearAllData()" class="btn-outline" style="color: #dc3545; border-color: #dc3545; background: white;">🗑️ Clear Tab</button>
       </div>
     </div>
-  </header>
 
-  <!-- Tabs -->
-  <nav class="tabs">
-    <div class="tabs-content">
+    <!-- Tabs -->
+    <div class="tabs">
       <button class="tab active" data-tab="shipinsure-optin" onclick="APP.switchTab('shipinsure-optin')">
         ShipInsure Pre-Opted In
       </button>
@@ -50,339 +589,301 @@
         ShipInsure Wish List
       </button>
     </div>
-  </nav>
 
-  <!-- Tab Header -->
-  <div class="tab-header">
-    <div class="tab-header-content">
-      <div>
+    <!-- Content -->
+    <div class="content">
+      <!-- Section Header -->
+      <div class="section-header">
         <h2 id="tab-title">ShipInsure Pre-Opted In</h2>
         <p id="tab-description">Merchants already opted in for partner introductions</p>
       </div>
-      <div class="tab-actions">
-        <button class="btn btn-outline" onclick="APP.exportCSV()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/></svg>
-          Export CSV
-        </button>
-        <button class="btn btn-outline master-only" onclick="document.getElementById('csv-input').click()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-          Import CSV
-        </button>
-        <button class="btn btn-outline btn-danger master-only" onclick="APP.clearAllData()" style="border-color: #dc3545; color: #dc3545;">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-          Clear All Data
-        </button>
-        <button class="btn btn-primary" onclick="APP.showAddModal()" id="add-merchant-btn">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          Add Merchant
-        </button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Hidden file input -->
-  <input type="file" id="csv-input" accept=".csv" onchange="APP.handleCSVUpload(event)" style="display: none;">
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat-card">
+          <h3>Total Merchants</h3>
+          <div class="number" id="stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Approved</h3>
+          <div class="number" id="stat-approved">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Asked</h3>
+          <div class="number" id="stat-asked">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Yes Received</h3>
+          <div class="number" id="stat-yes">0</div>
+        </div>
+        <div class="stat-card">
+          <h3>Emailed</h3>
+          <div class="number" id="stat-emailed">0</div>
+        </div>
+      </div>
 
-  <!-- Stats Bar -->
-  <div class="stats-bar">
-    <div class="stats-content">
-      <div class="stat-card">
-        <div class="stat-label">Total Merchants</div>
-        <div class="stat-value" id="stat-total">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Approved</div>
-        <div class="stat-value stat-success" id="stat-approved">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Asked</div>
-        <div class="stat-value stat-info" id="stat-asked">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Yes Received</div>
-        <div class="stat-value stat-warning" id="stat-yes">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Emailed</div>
-        <div class="stat-value stat-primary" id="stat-emailed">0</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Filters -->
-  <div class="filters">
-    <div class="filters-content">
-      <div class="filter-group">
-        <svg class="filter-icon" width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <!-- Controls -->
+      <div class="controls">
         <input type="text" id="search-input" placeholder="Search merchants or contacts..." oninput="APP.handleSearch(this.value)">
+        <select id="lifecycle-filter" onchange="APP.applyFilters()">
+          <option value="All">All Lifecycles</option>
+          <option value="In Deal Cycle">In Deal Cycle</option>
+          <option value="Churned">Churned</option>
+          <option value="Live ShipInsure Customer">Live ShipInsure Customer</option>
+          <option value="Live EcoCart Customer">Live EcoCart Customer</option>
+        </select>
+        <select id="icp-filter" onchange="APP.applyFilters()">
+          <option value="All">All ICP Levels</option>
+          <option value="ICP 1 (Best)">ICP 1 (Best)</option>
+          <option value="ICP 2 (Good)">ICP 2 (Good)</option>
+          <option value="ICP 3 (Not a Fit)">ICP 3 (Not a Fit)</option>
+          <option value="Not Sure">Not Sure</option>
+        </select>
+        <select id="ae-filter" class="master-only" onchange="APP.applyFilters()">
+          <option value="All">All AEs</option>
+        </select>
+        <button id="add-merchant-btn" onclick="APP.showAddModal()" class="btn-primary">+ Add Merchant</button>
+        <button onclick="APP.exportCSV()" class="btn-outline">📥 Export CSV</button>
       </div>
-      
-      <select id="lifecycle-filter" onchange="APP.applyFilters()">
-        <option value="All">All Lifecycles</option>
-        <option value="In Deal Cycle">In Deal Cycle</option>
-        <option value="Live ShipInsure Customer">Live ShipInsure Customer</option>
-        <option value="Live Partner Customer">Live Partner Customer</option>
-        <option value="Churned">Churned</option>
-      </select>
 
-      <select id="icp-filter" onchange="APP.applyFilters()">
-        <option value="All">All ICP Levels</option>
-        <option value="ICP 1 (Best)">ICP 1 (Best)</option>
-        <option value="ICP 2 (Good)">ICP 2 (Good)</option>
-        <option value="ICP 3 (Not a Fit)">ICP 3 (Not a Fit)</option>
-        <option value="Not Sure">Not Sure</option>
-      </select>
-
-      <select id="ae-filter" onchange="APP.applyFilters()">
-        <option value="All">All AEs</option>
-      </select>
+      <!-- Table -->
+      <table>
+        <thead>
+          <tr>
+            <th onclick="APP.sortBy('name')">
+              Merchant
+              <span class="sort-indicator" id="sort-name"></span>
+            </th>
+            <th onclick="APP.sortBy('contact_name')">
+              Contact
+              <span class="sort-indicator" id="sort-contact_name"></span>
+            </th>
+            <th onclick="APP.sortBy('lifecycle_stage')">
+              Lifecycle
+              <span class="sort-indicator" id="sort-lifecycle_stage"></span>
+            </th>
+            <th class="master-only" onclick="APP.sortBy('ae_email')">
+              AE
+              <span class="sort-indicator" id="sort-ae_email"></span>
+            </th>
+            <th onclick="APP.sortBy('icp_fit')">
+              ICP Fit
+              <span class="sort-indicator" id="sort-icp_fit"></span>
+            </th>
+            <th>Workflow</th>
+            <th>Approved</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="merchant-tbody">
+          <tr><td colspan="8" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
     </div>
-  </div>
-
-  <!-- Merchant Table -->
-  <div class="table-container">
-    <table class="merchant-table">
-      <thead>
-        <tr>
-          <th class="sortable" onclick="APP.sortBy('name')">
-            Merchant <span class="sort-indicator" id="sort-name"></span>
-          </th>
-          <th class="sortable" onclick="APP.sortBy('contact_name')">
-            Contact <span class="sort-indicator" id="sort-contact_name"></span>
-          </th>
-          <th class="sortable" onclick="APP.sortBy('lifecycle_stage')">
-            Lifecycle <span class="sort-indicator" id="sort-lifecycle_stage"></span>
-          </th>
-          <th class="master-only sortable" onclick="APP.sortBy('ae_email')">
-            AE <span class="sort-indicator" id="sort-ae_email"></span>
-          </th>
-          <th class="sortable" onclick="APP.sortBy('icp_fit')">
-            ICP Fit <span class="sort-indicator" id="sort-icp_fit"></span>
-          </th>
-          <th>Workflow</th>
-          <th>Approved</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="merchant-tbody">
-        <tr>
-          <td colspan="8" class="loading">Loading merchants...</td>
-        </tr>
-      </tbody>
-    </table>
   </div>
 
   <!-- Add Merchant Modal -->
-  <div id="add-modal" class="modal" style="display: none;">
+  <div id="add-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Add Merchant</h2>
-        <button class="modal-close" onclick="APP.closeModal('add-modal')">&times;</button>
+        <h3>Add Merchant</h3>
+        <button class="close-btn" onclick="APP.closeModal('add-modal')">&times;</button>
       </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Merchant Name *</label>
-            <input type="text" id="new-name" placeholder="Company name">
-          </div>
-          <div class="form-group">
-            <label>Website URL</label>
-            <input type="url" id="new-url" placeholder="https://example.com">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Contact Name *</label>
-            <input type="text" id="new-contact-name" placeholder="John Doe">
-          </div>
-          <div class="form-group">
-            <label>Contact Title</label>
-            <input type="text" id="new-contact-title" placeholder="VP of Sales">
-          </div>
-          <div class="form-group">
-            <label>Contact Email</label>
-            <input type="email" id="new-contact-email" placeholder="john@example.com">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Lifecycle Stage</label>
-            <select id="new-lifecycle">
-              <option>In Deal Cycle</option>
-              <option>Live ShipInsure Customer</option>
-              <option>Live Partner Customer</option>
-              <option>Churned</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>ICP Fit</label>
-            <select id="new-icp">
-              <option>ICP 1 (Best)</option>
-              <option>ICP 2 (Good)</option>
-              <option>ICP 3 (Not a Fit)</option>
-              <option selected>Not Sure</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>AE Owner</label>
-            <input type="email" id="new-ae" value="drew@shipinsure.io">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Notes</label>
-          <textarea id="new-notes" rows="3" placeholder="Additional notes..."></textarea>
-        </div>
+      
+      <div class="form-group">
+        <label>Company/Merchant Name *</label>
+        <input type="text" id="new-name">
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="APP.closeModal('add-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="APP.addMerchant()">Add Merchant</button>
+      
+      <div class="form-group">
+        <label>Website URL</label>
+        <input type="text" id="new-url" placeholder="https://">
+      </div>
+      
+      <div class="form-group">
+        <label>Contact Name *</label>
+        <input type="text" id="new-contact-name">
+      </div>
+      
+      <div class="form-group">
+        <label>Contact Title</label>
+        <input type="text" id="new-contact-title">
+      </div>
+      
+      <div class="form-group">
+        <label>Contact Email</label>
+        <input type="email" id="new-contact-email">
+      </div>
+      
+      <div class="form-group">
+        <label>Lifecycle Stage</label>
+        <select id="new-lifecycle">
+          <option>In Deal Cycle</option>
+          <option>Churned</option>
+          <option>Live ShipInsure Customer</option>
+          <option>Live EcoCart Customer</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>ICP Fit</label>
+        <select id="new-icp">
+          <option>ICP 1 (Best)</option>
+          <option>ICP 2 (Good)</option>
+          <option>ICP 3 (Not a Fit)</option>
+          <option selected>Not Sure</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>AE/Owner Email</label>
+        <input type="email" id="new-ae" value="drew@shipinsure.io">
+      </div>
+      
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="new-notes"></textarea>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="APP.closeModal('add-modal')">Cancel</button>
+        <button class="btn-primary" onclick="APP.addMerchant()">Add Merchant</button>
       </div>
     </div>
   </div>
 
   <!-- Email Modal -->
-  <div id="email-modal" class="modal" style="display: none;">
-    <div class="modal-content modal-large">
-      <div class="modal-header">
-        <h2>Generate Intro Email</h2>
-        <button class="modal-close" onclick="APP.closeModal('email-modal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="email-preview">
-          <div class="email-subject">
-            <strong>Subject:</strong> <span id="email-subject"></span>
-          </div>
-          <div class="email-body">
-            <pre id="email-body"></pre>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="APP.closeModal('email-modal')">Cancel</button>
-        <button class="btn btn-secondary" onclick="APP.copyEmail()">Copy to Clipboard</button>
-        <button class="btn btn-primary" onclick="APP.copyAndMarkSent()">Copy & Mark as Sent</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Branding Modal -->
-  <div id="branding-modal" class="modal" style="display: none;">
+  <div id="email-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Partner Branding</h2>
-        <button class="modal-close" onclick="APP.closeModal('branding-modal')">&times;</button>
+        <h3>Email Preview</h3>
+        <button class="close-btn" onclick="APP.closeModal('email-modal')">&times;</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Partner Name</label>
-          <input type="text" id="branding-name" placeholder="Digital Genius">
-        </div>
-        <div class="form-group">
-          <label>Partner Logo</label>
-          <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Recommended: 400x160px (transparent PNG works best)</p>
-          <div id="logo-preview" style="display: none; margin-bottom: 12px;">
-            <img id="logo-preview-img" style="height: 100px; object-fit: contain; border: 1px solid #e5e5e5; border-radius: 4px; padding: 8px;">
-          </div>
-          <button class="btn btn-outline" onclick="document.getElementById('logo-input').click()">
-            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-            Upload Logo
-          </button>
-          <input type="file" id="logo-input" accept="image/*" onchange="APP.handleLogoUpload(event)" style="display: none;">
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" id="master-mode" onchange="APP.toggleMasterMode(this.checked)">
-            Master Version (show all controls)
-          </label>
-        </div>
+      
+      <div class="email-preview">
+        <h4>Subject</h4>
+        <p id="email-subject"></p>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="APP.saveBranding()">Save</button>
+      
+      <div class="email-preview">
+        <h4>Body</h4>
+        <p id="email-body"></p>
       </div>
-    </div>
-  </div>
-
-  <!-- Template Editor Modal -->
-  <div id="template-modal" class="modal" style="display: none;">
-    <div class="modal-content modal-large">
-      <div class="modal-header">
-        <h2>Email Templates</h2>
-        <button class="modal-close" onclick="APP.closeModal('template-modal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="template-section">
-          <h3>ShipInsure Pre-Opted In Template</h3>
-          <div class="form-group">
-            <label>Subject</label>
-            <input type="text" id="template-optin-subject" class="template-input">
-          </div>
-          <div class="form-group">
-            <label>Body</label>
-            <textarea id="template-optin-body" rows="10" class="template-textarea"></textarea>
-          </div>
-        </div>
-
-        <div class="template-section">
-          <h3>Partner Wish List Template</h3>
-          <div class="form-group">
-            <label>Subject</label>
-            <input type="text" id="template-partner-subject" class="template-input">
-          </div>
-          <div class="form-group">
-            <label>Body</label>
-            <textarea id="template-partner-body" rows="10" class="template-textarea"></textarea>
-          </div>
-        </div>
-
-        <div class="template-section">
-          <h3>ShipInsure Wish List Template</h3>
-          <div class="form-group">
-            <label>Subject</label>
-            <input type="text" id="template-shipinsure-subject" class="template-input">
-          </div>
-          <div class="form-group">
-            <label>Body</label>
-            <textarea id="template-shipinsure-body" rows="10" class="template-textarea"></textarea>
-          </div>
-        </div>
-
-        <div class="template-help">
-          <strong>Available variables:</strong> {merchant_name}, {first_name}, {partner_name}, {partner_rep}, {partner_focus}, {partner_solution}, {shipinsure_rep}, {partner_value_prop}
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="APP.closeModal('template-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="APP.saveTemplates()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-          Save Templates
-        </button>
+      
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="APP.closeModal('email-modal')">Cancel</button>
+        <button class="btn-outline" onclick="APP.copyEmail()">Copy Email</button>
+        <button class="btn-primary" onclick="APP.copyAndMarkSent()">Copy & Mark Sent</button>
       </div>
     </div>
   </div>
 
   <!-- CSV Mapper Modal -->
-  <div id="csv-mapper-modal" class="modal" style="display: none;">
-    <div class="modal-content modal-large">
+  <div id="csv-mapper-modal" class="modal">
+    <div class="modal-content">
       <div class="modal-header">
-        <h2>Map CSV Fields</h2>
-        <button class="modal-close" onclick="APP.closeModal('csv-mapper-modal')">&times;</button>
+        <h3>Map CSV Columns</h3>
+        <button class="close-btn" onclick="APP.closeModal('csv-mapper-modal')">&times;</button>
       </div>
-      <div class="modal-body">
-        <p style="margin-bottom: 16px; color: #666;">Match your CSV columns to the app fields:</p>
-        <div id="csv-mapper-fields" class="mapper-grid"></div>
+      
+      <p style="margin-bottom: 20px; color: #6c757d;">Match your CSV columns to the fields below:</p>
+      
+      <div id="csv-mapper-fields">
+        <!-- Populated dynamically -->
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="APP.closeModal('csv-mapper-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="APP.confirmCSVMapping()">
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-          Import Data
-        </button>
+      
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="APP.closeModal('csv-mapper-modal')">Cancel</button>
+        <button class="btn-primary" onclick="APP.confirmCSVMapping()">Import</button>
       </div>
     </div>
   </div>
 
-  <!-- Load scripts -->
-  <script src="config.js"></script>
+  <!-- Branding Modal -->
+  <div id="branding-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Partner Branding</h3>
+        <button class="close-btn" onclick="APP.closeModal('branding-modal')">&times;</button>
+      </div>
+      
+      <div class="form-group">
+        <label>Partner Name</label>
+        <input type="text" id="branding-name">
+      </div>
+      
+      <div class="form-group">
+        <label>Partner Logo</label>
+        <input type="file" accept="image/*" onchange="APP.handleLogoUpload(event)">
+        <div id="logo-preview">
+          <img id="logo-preview-img" src="" alt="Logo preview">
+        </div>
+      </div>
+      
+      <div class="form-group" style="display: none;">
+        <label>
+          <input type="checkbox" id="master-mode" onchange="APP.toggleMasterMode(this.checked)">
+          Master Mode (see all partners)
+        </label>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="APP.closeModal('branding-modal')">Cancel</button>
+        <button class="btn-primary" onclick="APP.saveBranding()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template Editor Modal -->
+  <div id="template-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>Email Templates</h3>
+        <button class="close-btn" onclick="APP.closeModal('template-modal')">&times;</button>
+      </div>
+      
+      <h4 style="margin-top: 20px; margin-bottom: 12px;">ShipInsure Pre-Opted In</h4>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="template-optin-subject">
+      </div>
+      <div class="form-group">
+        <label>Body</label>
+        <textarea id="template-optin-body" style="min-height: 150px;"></textarea>
+      </div>
+      
+      <h4 style="margin-top: 20px; margin-bottom: 12px;">Partner Wish List</h4>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="template-partner-subject">
+      </div>
+      <div class="form-group">
+        <label>Body</label>
+        <textarea id="template-partner-body" style="min-height: 150px;"></textarea>
+      </div>
+      
+      <h4 style="margin-top: 20px; margin-bottom: 12px;">ShipInsure Wish List</h4>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="template-shipinsure-subject">
+      </div>
+      <div class="form-group">
+        <label>Body</label>
+        <textarea id="template-shipinsure-body" style="min-height: 150px;"></textarea>
+      </div>
+      
+      <p style="margin-top: 20px; color: #6c757d; font-size: 13px;">
+        Available variables: {merchant_name}, {first_name}, {partner_name}, {partner_rep}, {shipinsure_rep}
+      </p>
+      
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="APP.closeModal('template-modal')">Cancel</button>
+        <button class="btn-primary" onclick="APP.saveTemplates()">Save All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
   <script src="db.js"></script>
   <script src="app.js"></script>
 </body>
