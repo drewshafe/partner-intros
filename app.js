@@ -17,7 +17,8 @@
     csvImport: null,
     csvMapping: {},
     sortColumn: 'name',
-    sortDirection: 'asc'
+    sortDirection: 'asc',
+    partnerApprovals: [] // List of merchant IDs approved by current partner
   };
 
   // Initialize app
@@ -29,6 +30,9 @@
     
     // Load partner config
     await loadPartnerConfig();
+    
+    // Load partner approvals
+    await loadPartnerApprovals();
     
     // Load templates
     await loadTemplates();
@@ -121,6 +125,16 @@
     }
   }
 
+  // Load partner approvals
+  async function loadPartnerApprovals() {
+    try {
+      STATE.partnerApprovals = await DB.getPartnerApprovals(STATE.partnerConfig.partner_slug);
+    } catch (err) {
+      console.error('Error loading partner approvals:', err);
+      STATE.partnerApprovals = [];
+    }
+  }
+
   // Populate partner selector dropdown
   async function populatePartnerSelector() {
     try {
@@ -139,6 +153,7 @@
         const slug = e.target.value;
         if (slug) {
           await loadPartnerConfig(slug);
+          await loadPartnerApprovals();
           await loadMerchants();
         }
       });
@@ -172,13 +187,13 @@
       let merchants = await DB.getMerchants(STATE.currentTab);
       
       // Filter by partner_slug for partner views
-      if (!STATE.isMasterMode && STATE.currentTab === 'partner-wishlist') {
+      if (STATE.currentTab === 'partner-wishlist') {
         merchants = merchants.filter(m => m.partner_slug === STATE.partnerConfig.partner_slug);
       }
       
-      // Hide approved merchants from partner's Pre-Opted In view
-      if (!STATE.isMasterMode && STATE.currentTab === 'shipinsure-optin') {
-        merchants = merchants.filter(m => !m.approved);
+      // Hide merchants approved by THIS partner from Pre-Opted In view
+      if (STATE.currentTab === 'shipinsure-optin') {
+        merchants = merchants.filter(m => !STATE.partnerApprovals.includes(m.id));
       }
       
       STATE.merchants = merchants;
@@ -204,6 +219,8 @@
     tbody.innerHTML = STATE.filteredMerchants.map(m => {
       const siOptinBadge = m.notes && m.notes.includes('[SI Pre Opt-In]') ? 
         '<span class="badge badge-purple" style="margin-left: 8px; font-size: 10px;">SI Pre Opt-In</span>' : '';
+      
+      const isApproved = STATE.partnerApprovals.includes(m.id);
       
       return `
       <tr data-id="${m.id}">
@@ -237,8 +254,8 @@
         </td>
         <td>
           ${shouldShowApproveButton() ? `
-            <button class="btn-small ${m.approved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${m.id}')">
-              ${m.approved ? 'Approved' : 'Approve'}
+            <button class="btn-small ${isApproved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${m.id}')">
+              ${isApproved ? 'Approved' : 'Approve'}
             </button>
           ` : '-'}
         </td>
@@ -256,7 +273,7 @@
     const isMaster = STATE.isMasterMode;
     
     // Partner Wish List: Show partner_status dropdown
-    if (tab === 'partner-wishlist' && !isMaster) {
+    if (tab === 'partner-wishlist') {
       return `
         <select class="lifecycle-select" onchange="APP.updatePartnerStatus('${merchant.id}', this.value)">
           <option value="" ${!merchant.partner_status ? 'selected' : ''}>- Select -</option>
@@ -301,8 +318,8 @@
       return `<button class="btn-small btn-outline" onclick="APP.disqualifyMerchant('${merchant.id}')">Disqualify</button>`;
     }
     
-    // Partner Wish List (partner view): No action buttons (dropdown handles it)
-    if (tab === 'partner-wishlist' && !isMaster) {
+    // Partner Wish List: No action buttons (dropdown handles it)
+    if (tab === 'partner-wishlist') {
       return '-';
     }
     
@@ -386,14 +403,13 @@
     const tab = STATE.currentTab;
     const isMaster = STATE.isMasterMode;
     
-    // Master sees approve everywhere
-    if (isMaster) return true;
+    // Master sees approve everywhere except partner-wishlist
+    if (isMaster && tab !== 'partner-wishlist') return true;
     
-    // Partner does NOT see approve on ShipInsure Wish List
-    if (tab === 'shipinsure-wishlist') return false;
+    // Partner sees approve on Pre-Opted In only
+    if (!isMaster && tab === 'shipinsure-optin') return true;
     
-    // Partner sees approve on other tabs
-    return true;
+    return false;
   }
 
   // Check if ICP can be edited
@@ -646,47 +662,40 @@
     try {
       const merchant = STATE.merchants.find(m => m.id === id);
       const tab = STATE.currentTab;
-      const isMaster = STATE.isMasterMode;
+      const isApproved = STATE.partnerApprovals.includes(id);
       
-      // Partner approving from ShipInsure Pre-Opted In: Copy to their wishlist
-      if (!isMaster && tab === 'shipinsure-optin') {
-        if (merchant.approved) {
-          alert('Already approved and copied to your wish list');
-          return;
-        }
-        
-        // Create copy in partner wishlist WITH partner_slug and approved=true
-        const copy = {
-          name: merchant.name,
-          url: merchant.url,
-          contact_name: merchant.contact_name,
-          contact_title: merchant.contact_title,
-          contact_email: merchant.contact_email,
-          lifecycle_stage: merchant.lifecycle_stage,
-          icp_fit: merchant.icp_fit,
-          ae_email: merchant.ae_email,
-          notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
-          source_tab: 'partner-wishlist',
-          partner_slug: STATE.partnerConfig.partner_slug,
-          approved: true,
-          partner_status: null,
-          asked_date: null,
-          merchant_yes: false,
-          emailed_date: null
-        };
-        
-        await DB.addMerchant(copy);
-        
-        // Mark original as approved (will hide from partner's Pre-Opted In view)
-        await DB.updateMerchant(id, { approved: true });
-        
-        alert('✅ Merchant approved and added to your wish list!');
-        await loadMerchants(); // Refresh UI immediately
+      if (isApproved) {
+        alert('Already approved for this partner');
         return;
       }
       
-      // Master or other tabs: Normal toggle
-      await DB.updateMerchant(id, { approved: !merchant.approved });
+      // Add to partner_approvals table
+      await DB.addPartnerApproval(id, STATE.partnerConfig.partner_slug);
+      
+      // Create copy in partner wishlist WITH partner_slug
+      const copy = {
+        name: merchant.name,
+        url: merchant.url,
+        contact_name: merchant.contact_name,
+        contact_title: merchant.contact_title,
+        contact_email: merchant.contact_email,
+        lifecycle_stage: merchant.lifecycle_stage,
+        icp_fit: merchant.icp_fit,
+        ae_email: merchant.ae_email,
+        notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
+        source_tab: 'partner-wishlist',
+        partner_slug: STATE.partnerConfig.partner_slug,
+        approved: true,
+        partner_status: null,
+        asked_date: null,
+        merchant_yes: false,
+        emailed_date: null
+      };
+      
+      await DB.addMerchant(copy);
+      
+      alert('✅ Merchant approved and added to partner wish list!');
+      await loadPartnerApprovals();
       await loadMerchants(); // Refresh UI immediately
     } catch (err) {
       console.error('Error toggling approval:', err);
