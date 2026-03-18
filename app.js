@@ -65,6 +65,24 @@
     // Partner mode
     if (partnerSlug) {
       STATE.isMasterMode = false;
+      
+      // Check if already authenticated this session
+      const authKey = `partner_auth_${partnerSlug}`;
+      const isAuthenticated = sessionStorage.getItem(authKey);
+      
+      if (!isAuthenticated) {
+        const password = prompt(`Enter password for ${partnerSlug}:`);
+        const expectedPassword = `${partnerSlug}2026`;
+        
+        if (password === expectedPassword) {
+          sessionStorage.setItem(authKey, 'true');
+        } else {
+          alert('Invalid password');
+          document.body.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;"><h1>Access Denied</h1><p>Invalid partner password</p></div>';
+          throw new Error('Invalid partner password');
+        }
+      }
+      
       loadPartnerConfig(partnerSlug);
       document.getElementById('master-controls').style.display = 'none';
       document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
