@@ -420,9 +420,9 @@
     `;
     
     const contactCol = `
-      <td ${hasPendingChange(m.id, 'contact_name') || hasPendingChange(m.id, 'contact_email') ? 'style="background: #fff9c4;"' : ''}>
+      <td ${hasPendingChange(m.id, 'contact_name') || hasPendingChange(m.id, 'contact_title') ? 'style="background: #fff9c4;"' : ''}>
         <div class="contact-name">${m.contact_name || '-'}</div>
-        <div class="contact-email" style="font-size: 11px; color: #666;">${m.contact_email || ''}</div>
+        <div class="contact-title">${m.contact_title || ''}</div>
       </td>
     `;
     
