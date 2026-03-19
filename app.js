@@ -439,6 +439,7 @@
         </td>
         <td>
           ${renderSharedActions(m, isApproved)}
+          <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-left: 4px; color: #dc3545;">🗑️</button>
         </td>
       `;
     }
@@ -461,6 +462,7 @@
         </td>
         <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
           <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+          <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-top: 4px; color: #dc3545; font-size: 10px;">🗑️ Delete</button>
         </td>
       `;
     }
@@ -483,6 +485,7 @@
         </td>
         <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
           <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+          <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-top: 4px; color: #dc3545; font-size: 10px;">🗑️ Delete</button>
         </td>
       `;
     }
@@ -589,6 +592,25 @@
       'Churned': 'secondary'
     };
     return map[lifecycle] || 'secondary';
+  }
+
+  // Delete merchant
+  async function deleteMerchant(id) {
+    const merchant = STATE.merchants.find(m => m.id === id);
+    if (!merchant) return;
+    
+    if (!confirm(`Delete "${merchant.name}"? This cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      await DB.deleteMerchant(id);
+      alert('✅ Merchant deleted successfully');
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error deleting merchant:', err);
+      alert('Failed to delete merchant: ' + err.message);
+    }
   }
 
   // Update stats
@@ -880,11 +902,13 @@
     toggleWorkflowStep,
     disqualifyMerchant,
     toggleApproval,
+    deleteMerchant,
     showAddModal,
     addMerchant,
     saveAllChanges,
     createNewPartner,
-    closeModal
+    closeModal,
+    STATE // Expose STATE for table header script
   };
 
   // Initialize on load
