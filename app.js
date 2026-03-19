@@ -439,6 +439,7 @@
         </td>
         <td>
           ${renderSharedActions(m, isApproved)}
+          <button class="btn-small btn-outline" onclick="APP.showEditModal('${m.id}')" style="margin-left: 4px;">✏️</button>
           <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-left: 4px; color: #dc3545;">🗑️</button>
         </td>
       `;
@@ -462,6 +463,7 @@
         </td>
         <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
           <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+          <button class="btn-small btn-outline" onclick="APP.showEditModal('${m.id}')" style="margin-top: 4px; font-size: 10px;">✏️ Edit</button>
           <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-top: 4px; color: #dc3545; font-size: 10px;">🗑️ Delete</button>
         </td>
       `;
@@ -485,6 +487,7 @@
         </td>
         <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
           <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+          <button class="btn-small btn-outline" onclick="APP.showEditModal('${m.id}')" style="margin-top: 4px; font-size: 10px;">✏️ Edit</button>
           <button class="btn-small btn-outline" onclick="APP.deleteMerchant('${m.id}')" style="margin-top: 4px; color: #dc3545; font-size: 10px;">🗑️ Delete</button>
         </td>
       `;
@@ -848,10 +851,9 @@
   // Add merchant
   async function addMerchant() {
     const name = document.getElementById('new-name').value.trim();
-    const contactName = document.getElementById('new-contact-name').value.trim();
     
-    if (!name || !contactName) {
-      alert('Merchant name and contact name are required');
+    if (!name) {
+      alert('Merchant name is required');
       return;
     }
     
@@ -859,9 +861,9 @@
       name,
       url: document.getElementById('new-url').value.trim(),
       lifecycle_stage: document.getElementById('new-lifecycle').value,
-      contact_name: contactName,
-      contact_title: document.getElementById('new-contact-title').value.trim(),
-      contact_email: document.getElementById('new-contact-email').value.trim(),
+      contact_name: document.getElementById('new-contact-name').value.trim() || null,
+      contact_title: document.getElementById('new-contact-title').value.trim() || null,
+      contact_email: document.getElementById('new-contact-email').value.trim() || null,
       ae_email: document.getElementById('new-ae').value.trim(),
       notes: document.getElementById('new-notes').value.trim(),
       source_tab: STATE.currentTab,
@@ -886,6 +888,54 @@
     }
   }
 
+  // Show edit modal
+  function showEditModal(id) {
+    const merchant = STATE.merchants.find(m => m.id === id);
+    if (!merchant) return;
+    
+    STATE.selectedMerchant = merchant;
+    
+    document.getElementById('edit-name').value = merchant.name || '';
+    document.getElementById('edit-url').value = merchant.url || '';
+    document.getElementById('edit-contact-name').value = merchant.contact_name || '';
+    document.getElementById('edit-contact-title').value = merchant.contact_title || '';
+    document.getElementById('edit-lifecycle').value = merchant.lifecycle_stage || 'In Deal Cycle';
+    document.getElementById('edit-notes').value = merchant.notes || '';
+    
+    document.getElementById('edit-modal').style.display = 'flex';
+  }
+
+  // Save merchant edit
+  async function saveEditMerchant() {
+    if (!STATE.selectedMerchant) return;
+    
+    const name = document.getElementById('edit-name').value.trim();
+    
+    if (!name) {
+      alert('Merchant name is required');
+      return;
+    }
+    
+    const updates = {
+      name,
+      url: document.getElementById('edit-url').value.trim(),
+      contact_name: document.getElementById('edit-contact-name').value.trim() || null,
+      contact_title: document.getElementById('edit-contact-title').value.trim() || null,
+      lifecycle_stage: document.getElementById('edit-lifecycle').value,
+      notes: document.getElementById('edit-notes').value.trim()
+    };
+    
+    try {
+      await DB.updateMerchant(STATE.selectedMerchant.id, updates);
+      closeModal('edit-modal');
+      alert('✅ Merchant updated successfully');
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error updating merchant:', err);
+      alert('Failed to update merchant');
+    }
+  }
+
   // Close modal
   function closeModal(id) {
     document.getElementById(id).style.display = 'none';
@@ -905,6 +955,8 @@
     deleteMerchant,
     showAddModal,
     addMerchant,
+    showEditModal,
+    saveEditMerchant,
     saveAllChanges,
     createNewPartner,
     closeModal,
