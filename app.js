@@ -36,6 +36,9 @@
     if (STATE.partnerConfig.partner_slug) {
       await loadPartnerConfig();
       await loadPartnerApprovals();
+    } else {
+      // Master mode with no partner selected - update header
+      updateHeader();
     }
     
     // Load templates
@@ -109,6 +112,27 @@
     }
   }
 
+  // Update header with logos and title
+  function updateHeader() {
+    const partnerLogo = document.getElementById('partner-logo');
+    const headerTitle = document.getElementById('header-title');
+    
+    if (STATE.isMasterMode && !STATE.partnerConfig.partner_slug) {
+      // Admin mode, no partner selected
+      partnerLogo.style.display = 'none';
+      headerTitle.textContent = 'Admin Portal';
+    } else if (STATE.partnerConfig.partner_slug) {
+      // Partner selected or partner mode
+      if (STATE.partnerConfig.logo_url) {
+        partnerLogo.src = STATE.partnerConfig.logo_url;
+        partnerLogo.style.display = 'block';
+      } else {
+        partnerLogo.style.display = 'none';
+      }
+      headerTitle.textContent = 'Partner Portal';
+    }
+  }
+
   // Load partner configuration
   async function loadPartnerConfig(slug) {
     if (!slug) slug = STATE.partnerConfig.partner_slug;
@@ -118,15 +142,8 @@
       const config = await DB.getPartnerConfig(slug);
       if (config) {
         STATE.partnerConfig = config;
-        document.getElementById('partner-name').textContent = config.partner_name;
         document.querySelector('#partner-wishlist-label').textContent = `${config.partner_name} Wish List`;
-        
-        if (config.logo_url) {
-          const logoEl = document.getElementById('partner-logo');
-          logoEl.src = config.logo_url;
-          logoEl.style.display = 'block';
-          document.getElementById('logo-placeholder').style.display = 'none';
-        }
+        updateHeader();
       }
     } catch (err) {
       console.error('Error loading partner config:', err);
@@ -182,6 +199,7 @@
           // Reset to no partner selected
           STATE.partnerConfig = { partner_slug: '', partner_name: 'Partner Name' };
           STATE.partnerApprovals = [];
+          updateHeader();
           await loadMerchants();
           updateSaveButtonVisibility();
         }
@@ -220,7 +238,7 @@
     
     // Update UI
     STATE.partnerConfig = STATE.newPartnerData;
-    document.getElementById('partner-name').textContent = name;
+    updateHeader();
     
     closeModal('create-partner-modal');
     updateSaveButtonVisibility();
