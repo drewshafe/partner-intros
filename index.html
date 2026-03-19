@@ -51,6 +51,11 @@
       display: none;
     }
     
+    #shipinsure-logo {
+      max-height: 40px;
+      max-width: 200px;
+    }
+    
     #logo-placeholder {
       width: 50px;
       height: 50px;
@@ -62,13 +67,10 @@
       font-size: 24px;
     }
     
-    h1 {
-      font-size: 24px;
+    .header-title {
+      font-size: 20px;
+      font-weight: 600;
       color: #2c3e50;
-    }
-    
-    #partner-name {
-      color: #3498db;
     }
     
     .controls {
@@ -518,11 +520,10 @@
   <div class="container">
     <header>
       <div class="logo-section">
-        <div id="logo-placeholder">🤝</div>
+        <div id="logo-placeholder" style="display: none;">🤝</div>
         <img id="partner-logo" alt="Partner Logo">
-        <div>
-          <h1>Partner Intros: <span id="partner-name">Partner Name</span></h1>
-        </div>
+        <img id="shipinsure-logo" src="https://drewshafe.github.io/partner-intros/shipinsure-logo-dark.png" alt="ShipInsure">
+        <span class="header-title" id="header-title">Partner Portal</span>
       </div>
       
       <div class="controls">
@@ -741,7 +742,7 @@
       function updateTableHeaders() {
         const activeTab = document.querySelector('.tab.active')?.dataset.tab;
         const tableHead = document.getElementById('table-head');
-        const partnerName = document.getElementById('partner-name').textContent;
+        const partnerName = document.getElementById('partner-name')?.textContent || 'Partner';
         
         if (!tableHead || !activeTab) return;
         
