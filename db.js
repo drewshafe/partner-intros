@@ -1,5 +1,5 @@
 // Database layer - Supabase client and all DB operations
-// Partner Intros - follows tradeshow-tracker patterns
+// Partner Intros - Simplified workflow version
 
 const DB = (function() {
   'use strict';
@@ -24,7 +24,7 @@ const DB = (function() {
     return data;
   }
 
-  // Get all partner configs (for admin partner selector)
+  // Get all partner configs
   async function getAllPartnerConfigs() {
     const { data, error } = await supabase
       .from('partner_config')
@@ -33,6 +33,17 @@ const DB = (function() {
     
     if (error) throw error;
     return data || [];
+  }
+
+  // Create new partner config
+  async function createPartnerConfig(config) {
+    const { data, error } = await supabase
+      .from('partner_config')
+      .insert([config])
+      .select();
+    
+    if (error) throw error;
+    return data[0];
   }
 
   // Update partner configuration
@@ -86,19 +97,6 @@ const DB = (function() {
     return data || [];
   }
 
-  // Check if partner approved a merchant
-  async function isApprovedByPartner(merchantId, partnerSlug) {
-    const { data, error } = await supabase
-      .from('partner_approvals')
-      .select('*')
-      .eq('merchant_id', merchantId)
-      .eq('partner_slug', partnerSlug)
-      .single();
-    
-    if (error) return false;
-    return !!data;
-  }
-
   // Get all approvals for a partner
   async function getPartnerApprovals(partnerSlug) {
     const { data, error } = await supabase
@@ -131,7 +129,7 @@ const DB = (function() {
     return data;
   }
 
-  // Update merchant
+  // Update merchant (single)
   async function updateMerchant(id, updates) {
     const { data, error } = await supabase
       .from('merchants')
@@ -140,6 +138,25 @@ const DB = (function() {
     
     if (error) throw error;
     return data;
+  }
+
+  // Batch update merchants (for Save button)
+  async function batchUpdateMerchants(updates) {
+    // updates is array of { id, fields }
+    const promises = updates.map(({ id, fields }) => 
+      supabase.from('merchants').update(fields).eq('id', id)
+    );
+    
+    const results = await Promise.all(promises);
+    
+    // Check for errors
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) {
+      console.error('Batch update errors:', errors);
+      throw new Error('Some updates failed');
+    }
+    
+    return results;
   }
 
   // Delete merchant
@@ -189,15 +206,12 @@ const DB = (function() {
 
   // Clear all data for a tab
   async function clearTabData(tab) {
-    // Delete merchants for this tab
     const { error } = await supabase
       .from('merchants')
       .delete()
       .eq('source_tab', tab);
     
     if (error) throw error;
-    
-    // Return count (we don't have it, so just return success)
     return { deleted: 1 };
   }
 
@@ -231,15 +245,16 @@ const DB = (function() {
   return {
     getPartnerConfig,
     getAllPartnerConfigs,
+    createPartnerConfig,
     updatePartnerConfig,
     getTemplate,
     updateTemplate,
     getMerchants,
-    isApprovedByPartner,
     getPartnerApprovals,
     addPartnerApproval,
     addMerchant,
     updateMerchant,
+    batchUpdateMerchants,
     deleteMerchant,
     bulkUpsertMerchants,
     getStats,
