@@ -415,7 +415,7 @@
     // Common columns
     const merchantCol = `
       <td ${hasPendingChange(m.id, 'name') ? 'style="background: #fff9c4;"' : ''}>
-        <a href="${m.url || '#'}" target="_blank" class="merchant-link">${m.name}</a>${partnerEditBadge}
+        ${m.url && m.url.trim() ? `<a href="${m.url}" target="_blank" class="merchant-link">${m.name}</a>` : `<span class="merchant-link">${m.name}</span>`}${partnerEditBadge}
       </td>
     `;
     
