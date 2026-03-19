@@ -630,8 +630,9 @@
       </div>
       
       <div class="form-group">
-        <label>Contact Name *</label>
+        <label>Contact Name</label>
         <input type="text" id="new-contact-name" placeholder="John Smith">
+        <small>Optional - can be added later</small>
       </div>
       
       <div class="form-group">
@@ -667,6 +668,54 @@
       <div class="modal-actions">
         <button onclick="APP.addMerchant()" class="btn-primary">Add Merchant</button>
         <button onclick="APP.closeModal('add-modal')" class="btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Merchant Modal -->
+  <div id="edit-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h2>Edit Merchant</h2>
+      
+      <div class="form-group">
+        <label>Merchant Name *</label>
+        <input type="text" id="edit-name" placeholder="Acme Corp">
+      </div>
+      
+      <div class="form-group">
+        <label>Website URL</label>
+        <input type="text" id="edit-url" placeholder="https://acmecorp.com">
+      </div>
+      
+      <div class="form-group">
+        <label>Contact Name</label>
+        <input type="text" id="edit-contact-name" placeholder="John Smith">
+        <small>Optional - can be added later</small>
+      </div>
+      
+      <div class="form-group">
+        <label>Contact Title</label>
+        <input type="text" id="edit-contact-title" placeholder="CEO">
+      </div>
+      
+      <div class="form-group">
+        <label>Lifecycle Stage</label>
+        <select id="edit-lifecycle">
+          <option>In Deal Cycle</option>
+          <option>Churned</option>
+          <option>Live ShipInsure Customer</option>
+          <option>Live EcoCart Customer</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="edit-notes" placeholder="Additional notes..."></textarea>
+      </div>
+      
+      <div class="modal-actions">
+        <button onclick="APP.saveEditMerchant()" class="btn-primary">Save Changes</button>
+        <button onclick="APP.closeModal('edit-modal')" class="btn-outline">Cancel</button>
       </div>
     </div>
   </div>
