@@ -1,5 +1,6 @@
-// Partner Intros - Main Application Logic
-// Follows tradeshow-tracker patterns
+// Partner Intros - Simplified workflow with Save button
+// Master admin has pending changes with Save button
+// Partner changes auto-sync
 
 (function() {
   'use strict';
@@ -10,7 +11,7 @@
     merchants: [],
     filteredMerchants: [],
     templates: {},
-    partnerConfig: { partner_slug: 'digital-genius', partner_name: 'Partner Name' },
+    partnerConfig: { partner_slug: '', partner_name: 'Partner Name' },
     isMasterMode: true,
     realtimeChannel: null,
     selectedMerchant: null,
@@ -18,7 +19,10 @@
     csvMapping: {},
     sortColumn: 'name',
     sortDirection: 'asc',
-    partnerApprovals: [] // List of merchant IDs approved by current partner
+    partnerApprovals: [],
+    pendingChanges: {}, // { merchantId: { field: value } }
+    isCreatingNewPartner: false,
+    newPartnerData: null
   };
 
   // Initialize app
@@ -28,11 +32,11 @@
     // Check authentication
     checkAuthentication();
     
-    // Load partner config
-    await loadPartnerConfig();
-    
-    // Load partner approvals
-    await loadPartnerApprovals();
+    // Load partner config (only if slug is set)
+    if (STATE.partnerConfig.partner_slug) {
+      await loadPartnerConfig();
+      await loadPartnerApprovals();
+    }
     
     // Load templates
     await loadTemplates();
@@ -63,12 +67,14 @@
     // Master mode with password
     if (masterPassword === '4224') {
       STATE.isMasterMode = true;
+      STATE.partnerConfig.partner_slug = ''; // Default to no partner selected
       return;
     }
     
     // Partner mode
     if (partnerSlug) {
       STATE.isMasterMode = false;
+      STATE.partnerConfig.partner_slug = partnerSlug;
       
       // Check if already authenticated this session
       const authKey = `partner_auth_${partnerSlug}`;
@@ -87,7 +93,6 @@
         }
       }
       
-      loadPartnerConfig(partnerSlug);
       document.getElementById('master-controls').style.display = 'none';
       document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
       return;
@@ -105,7 +110,10 @@
   }
 
   // Load partner configuration
-  async function loadPartnerConfig(slug = 'digital-genius') {
+  async function loadPartnerConfig(slug) {
+    if (!slug) slug = STATE.partnerConfig.partner_slug;
+    if (!slug) return;
+    
     try {
       const config = await DB.getPartnerConfig(slug);
       if (config) {
@@ -127,6 +135,11 @@
 
   // Load partner approvals
   async function loadPartnerApprovals() {
+    if (!STATE.partnerConfig.partner_slug) {
+      STATE.partnerApprovals = [];
+      return;
+    }
+    
     try {
       STATE.partnerApprovals = await DB.getPartnerApprovals(STATE.partnerConfig.partner_slug);
     } catch (err) {
@@ -147,19 +160,72 @@
       }
       
       select.innerHTML = '<option value="">-- Select Partner --</option>' +
-        partners.map(p => `<option value="${p.partner_slug}" ${p.partner_slug === STATE.partnerConfig.partner_slug ? 'selected' : ''}>${p.partner_name}</option>`).join('');
+        partners.map(p => `<option value="${p.partner_slug}">${p.partner_name}</option>`).join('') +
+        '<option value="__create_new__">+ Create New Partner</option>';
       
       select.addEventListener('change', async (e) => {
         const slug = e.target.value;
+        
+        if (slug === '__create_new__') {
+          showCreatePartnerModal();
+          e.target.value = ''; // Reset to "Select Partner"
+          return;
+        }
+        
         if (slug) {
+          STATE.partnerConfig.partner_slug = slug;
           await loadPartnerConfig(slug);
           await loadPartnerApprovals();
           await loadMerchants();
+          updateSaveButtonVisibility();
+        } else {
+          // Reset to no partner selected
+          STATE.partnerConfig = { partner_slug: '', partner_name: 'Partner Name' };
+          STATE.partnerApprovals = [];
+          await loadMerchants();
+          updateSaveButtonVisibility();
         }
       });
     } catch (err) {
       console.error('Error populating partner selector:', err);
     }
+  }
+
+  // Show create partner modal
+  function showCreatePartnerModal() {
+    document.getElementById('new-partner-slug').value = '';
+    document.getElementById('new-partner-name').value = '';
+    document.getElementById('new-partner-logo').value = '';
+    document.getElementById('create-partner-modal').style.display = 'flex';
+  }
+
+  // Create new partner
+  function createNewPartner() {
+    const slug = document.getElementById('new-partner-slug').value.trim();
+    const name = document.getElementById('new-partner-name').value.trim();
+    const logoUrl = document.getElementById('new-partner-logo').value.trim();
+    
+    if (!slug || !name) {
+      alert('Partner slug and name are required');
+      return;
+    }
+    
+    // Store in state (won't save until Save button clicked)
+    STATE.isCreatingNewPartner = true;
+    STATE.newPartnerData = {
+      partner_slug: slug,
+      partner_name: name,
+      logo_url: logoUrl || `https://drewshafe.github.io/partner-intros/${slug}.png`
+    };
+    
+    // Update UI
+    STATE.partnerConfig = STATE.newPartnerData;
+    document.getElementById('partner-name').textContent = name;
+    
+    closeModal('create-partner-modal');
+    updateSaveButtonVisibility();
+    
+    alert('New partner created. Click SAVE to persist changes.');
   }
 
   // Load email templates
@@ -182,17 +248,17 @@
   // Load merchants for current tab
   async function loadMerchants() {
     try {
-      document.getElementById('merchant-tbody').innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+      document.getElementById('merchant-tbody').innerHTML = '<tr><td colspan="10" class="loading">Loading...</td></tr>';
       
       let merchants = await DB.getMerchants(STATE.currentTab);
       
       // Filter by partner_slug for partner views
-      if (STATE.currentTab === 'partner-wishlist') {
+      if (STATE.currentTab === 'partner-wishlist' && STATE.partnerConfig.partner_slug) {
         merchants = merchants.filter(m => m.partner_slug === STATE.partnerConfig.partner_slug);
       }
       
       // Hide merchants approved by THIS partner from Pre-Opted In view
-      if (STATE.currentTab === 'shipinsure-optin') {
+      if (STATE.currentTab === 'shipinsure-optin' && STATE.partnerConfig.partner_slug) {
         merchants = merchants.filter(m => !STATE.partnerApprovals.includes(m.id));
       }
       
@@ -203,7 +269,101 @@
       updateStats();
     } catch (err) {
       console.error('Error loading merchants:', err);
-      document.getElementById('merchant-tbody').innerHTML = '<tr><td colspan="8" class="error">Error loading merchants</td></tr>';
+      document.getElementById('merchant-tbody').innerHTML = '<tr><td colspan="10" class="error">Error loading merchants</td></tr>';
+    }
+  }
+
+  // Check if field has pending changes
+  function hasPendingChange(merchantId, field) {
+    return STATE.pendingChanges[merchantId] && STATE.pendingChanges[merchantId][field] !== undefined;
+  }
+
+  // Track pending change
+  function trackPendingChange(merchantId, field, value) {
+    if (!STATE.isMasterMode) {
+      // Partner changes auto-save
+      updateMerchantField(merchantId, field, value, true);
+      return;
+    }
+    
+    // Master mode: track for later save
+    if (!STATE.pendingChanges[merchantId]) {
+      STATE.pendingChanges[merchantId] = {};
+    }
+    STATE.pendingChanges[merchantId][field] = value;
+    
+    updateSaveButtonVisibility();
+    renderMerchants(); // Re-render to show yellow highlighting
+  }
+
+  // Update merchant field immediately (for partner auto-save)
+  async function updateMerchantField(merchantId, field, value, setPartnerEdited = false) {
+    try {
+      const updates = { [field]: value };
+      if (setPartnerEdited) {
+        updates.partner_edited = true;
+      }
+      
+      await DB.updateMerchant(merchantId, updates);
+      console.log('Field updated:', field, value);
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error updating field:', err);
+      alert('Failed to update');
+    }
+  }
+
+  // Save all pending changes
+  async function saveAllChanges() {
+    if (Object.keys(STATE.pendingChanges).length === 0 && !STATE.isCreatingNewPartner) {
+      alert('No pending changes to save');
+      return;
+    }
+    
+    try {
+      // Create new partner if needed
+      if (STATE.isCreatingNewPartner && STATE.newPartnerData) {
+        await DB.createPartnerConfig(STATE.newPartnerData);
+        STATE.isCreatingNewPartner = false;
+        STATE.newPartnerData = null;
+        await populatePartnerSelector();
+      }
+      
+      // Batch update merchants
+      if (Object.keys(STATE.pendingChanges).length > 0) {
+        const updates = Object.entries(STATE.pendingChanges).map(([id, fields]) => ({
+          id,
+          fields
+        }));
+        
+        await DB.batchUpdateMerchants(updates);
+      }
+      
+      // Clear pending changes
+      STATE.pendingChanges = {};
+      updateSaveButtonVisibility();
+      
+      alert('✅ All changes saved successfully!');
+      await loadMerchants();
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      alert('Failed to save changes: ' + err.message);
+    }
+  }
+
+  // Update Save button visibility and state
+  function updateSaveButtonVisibility() {
+    const saveBtn = document.getElementById('save-all-btn');
+    if (!saveBtn) return;
+    
+    const hasPending = Object.keys(STATE.pendingChanges).length > 0 || STATE.isCreatingNewPartner;
+    
+    if (STATE.isMasterMode && STATE.partnerConfig.partner_slug) {
+      saveBtn.style.display = 'inline-flex';
+      saveBtn.disabled = !hasPending;
+      saveBtn.style.opacity = hasPending ? '1' : '0.5';
+    } else {
+      saveBtn.style.display = 'none';
     }
   }
 
@@ -212,178 +372,193 @@
     const tbody = document.getElementById('merchant-tbody');
     
     if (STATE.filteredMerchants.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No merchants found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty">No merchants found</td></tr>';
       return;
     }
 
     tbody.innerHTML = STATE.filteredMerchants.map(m => {
-      const siOptinBadge = m.notes && m.notes.includes('[SI Pre Opt-In]') ? 
-        '<span class="badge badge-purple" style="margin-left: 8px; font-size: 10px;">SI Pre Opt-In</span>' : '';
-      
       const isApproved = STATE.partnerApprovals.includes(m.id);
+      const partnerEditBadge = m.partner_edited && STATE.isMasterMode ? 
+        '<span class="badge badge-info" style="margin-left: 8px; font-size: 10px;">Partner Edit</span>' : '';
       
       return `
       <tr data-id="${m.id}">
-        <td>
-          <a href="${m.url || '#'}" target="_blank" class="merchant-link">${m.name}</a>${siOptinBadge}
-        </td>
-        <td>
-          <div class="contact-name">${m.contact_name || '-'}</div>
-          <div class="contact-title">${m.contact_title || ''}</div>
-        </td>
-        <td>
-          ${canEditLifecycle(m) ? `
-            <select class="lifecycle-select" onchange="APP.updateLifecycle('${m.id}', this.value)">
-              ${getLifecycleOptions(m)}
-            </select>
-          ` : `
-            <span class="badge badge-${getBadgeClass(m.lifecycle_stage)}">${m.lifecycle_stage}</span>
-          `}
-        </td>
-        <td class="master-only">${(m.ae_email || '').split('@')[0]}</td>
-        <td>
-          <select class="icp-select" onchange="APP.updateICP('${m.id}', this.value)" ${!canEditICP() ? 'disabled' : ''}>
-            <option ${m.icp_fit === 'ICP 1 (Best)' ? 'selected' : ''}>ICP 1 (Best)</option>
-            <option ${m.icp_fit === 'ICP 2 (Good)' ? 'selected' : ''}>ICP 2 (Good)</option>
-            <option ${m.icp_fit === 'ICP 3 (Not a Fit)' ? 'selected' : ''}>ICP 3 (Not a Fit)</option>
-            <option ${m.icp_fit === 'Not Sure' ? 'selected' : ''}>Not Sure</option>
-          </select>
-        </td>
-        <td>
-          ${getWorkflowDisplay(m)}
-        </td>
-        <td>
-          ${shouldShowApproveButton() ? `
-            <button class="btn-small ${isApproved ? 'btn-success' : 'btn-outline'}" onclick="APP.toggleApproval('${m.id}')">
-              ${isApproved ? 'Approved' : 'Approve'}
-            </button>
-          ` : '-'}
-        </td>
-        <td>
-          ${getActionButtons(m)}
-        </td>
+        ${renderMerchantColumns(m, isApproved, partnerEditBadge)}
       </tr>
       `;
     }).join('');
   }
 
-  // Get workflow display (different for partner wishlist)
-  function getWorkflowDisplay(merchant) {
+  // Render merchant columns based on tab
+  function renderMerchantColumns(m, isApproved, partnerEditBadge) {
     const tab = STATE.currentTab;
     const isMaster = STATE.isMasterMode;
     
-    // Partner Wish List: Show partner_status dropdown
-    if (tab === 'partner-wishlist') {
+    // Common columns
+    const merchantCol = `
+      <td ${hasPendingChange(m.id, 'name') ? 'style="background: #fff9c4;"' : ''}>
+        <a href="${m.url || '#'}" target="_blank" class="merchant-link">${m.name}</a>${partnerEditBadge}
+      </td>
+    `;
+    
+    const contactCol = `
+      <td ${hasPendingChange(m.id, 'contact_name') || hasPendingChange(m.id, 'contact_email') ? 'style="background: #fff9c4;"' : ''}>
+        <div class="contact-name">${m.contact_name || '-'}</div>
+        <div class="contact-email" style="font-size: 11px; color: #666;">${m.contact_email || ''}</div>
+      </td>
+    `;
+    
+    // Tab-specific columns
+    if (tab === 'shipinsure-optin') {
       return `
-        <select class="lifecycle-select" onchange="APP.updatePartnerStatus('${merchant.id}', this.value)">
-          <option value="" ${!merchant.partner_status ? 'selected' : ''}>- Select -</option>
-          <option ${merchant.partner_status === 'Intro Made' ? 'selected' : ''}>Intro Made</option>
-          <option ${merchant.partner_status === 'Prospect = Yes' ? 'selected' : ''}>Prospect = Yes</option>
-          <option ${merchant.partner_status === 'Prospect = No' ? 'selected' : ''}>Prospect = No</option>
-          <option ${merchant.partner_status === 'Meeting Scheduled' ? 'selected' : ''}>Meeting Scheduled</option>
-          <option ${merchant.partner_status === 'Demo Met' ? 'selected' : ''}>Demo Met</option>
-          <option ${merchant.partner_status === 'Gift Card Sent' ? 'selected' : ''}>Gift Card Sent</option>
-        </select>
+        ${merchantCol}
+        ${contactCol}
+        <td ${hasPendingChange(m.id, 'lifecycle_stage') ? 'style="background: #fff9c4;"' : ''}>
+          ${renderLifecycleSelect(m)}
+        </td>
+        <td class="master-only" ${hasPendingChange(m.id, 'ae_email') ? 'style="background: #fff9c4;"' : ''}>
+          ${(m.ae_email || '').split('@')[0]}
+        </td>
+        <td>
+          ${renderSharedActions(m, isApproved)}
+        </td>
       `;
     }
     
-    // Otherwise: Standard workflow indicators
+    if (tab === 'partner-wishlist') {
+      return `
+        ${merchantCol}
+        ${contactCol}
+        <td ${hasPendingChange(m.id, 'lifecycle_stage') ? 'style="background: #fff9c4;"' : ''}>
+          ${renderLifecycleSelect(m)}
+        </td>
+        <td class="master-only" ${hasPendingChange(m.id, 'ae_email') ? 'style="background: #fff9c4;"' : ''}>
+          ${(m.ae_email || '').split('@')[0]}
+        </td>
+        <td>
+          ${renderWorkflowIndicators(m, ['si_contact_yes', 'si_intro_sent'], 'SI')}
+        </td>
+        <td>
+          ${renderWorkflowIndicators(m, ['partner_replied', 'partner_booked', 'partner_met', 'partner_sent_gift', 'partner_in_onboarding', 'partner_closed_won', 'partner_closed_lost'], 'Partner')}
+        </td>
+        <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
+          <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+        </td>
+      `;
+    }
+    
+    if (tab === 'shipinsure-wishlist') {
+      return `
+        ${merchantCol}
+        ${contactCol}
+        <td ${hasPendingChange(m.id, 'lifecycle_stage') ? 'style="background: #fff9c4;"' : ''}>
+          ${renderPartnerLifecycleSelect(m)}
+        </td>
+        <td ${hasPendingChange(m.id, 'partner_ae_email') ? 'style="background: #fff9c4;"' : ''}>
+          ${(m.partner_ae_email || '-').split('@')[0]}
+        </td>
+        <td>
+          ${renderWorkflowIndicators(m, ['partner_contact_yes', 'partner_intro_sent'], 'Partner')}
+        </td>
+        <td>
+          ${renderWorkflowIndicators(m, ['si_booked', 'si_met', 'si_sent_gift', 'si_in_onboarding', 'si_closed_won', 'si_closed_lost'], 'SI')}
+        </td>
+        <td ${hasPendingChange(m.id, 'notes') ? 'style="background: #fff9c4;"' : ''}>
+          <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.notes || ''}">${m.notes || '-'}</div>
+        </td>
+      `;
+    }
+    
+    return '';
+  }
+
+  // Render lifecycle select
+  function renderLifecycleSelect(m) {
+    if (!STATE.isMasterMode) {
+      return `<span class="badge badge-${getBadgeClass(m.lifecycle_stage)}">${m.lifecycle_stage}</span>`;
+    }
+    
+    const pending = hasPendingChange(m.id, 'lifecycle_stage');
+    const value = pending ? STATE.pendingChanges[m.id].lifecycle_stage : m.lifecycle_stage;
+    
+    return `
+      <select class="lifecycle-select" onchange="APP.updateLifecycle('${m.id}', this.value)">
+        <option ${value === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
+        <option ${value === 'Churned' ? 'selected' : ''}>Churned</option>
+        <option ${value === 'Live ShipInsure Customer' ? 'selected' : ''}>Live ShipInsure Customer</option>
+        <option ${value === 'Live EcoCart Customer' ? 'selected' : ''}>Live EcoCart Customer</option>
+      </select>
+    `;
+  }
+
+  // Render partner lifecycle select (SI Wish List only)
+  function renderPartnerLifecycleSelect(m) {
+    const pending = hasPendingChange(m.id, 'lifecycle_stage');
+    const value = pending ? STATE.pendingChanges[m.id].lifecycle_stage : m.lifecycle_stage;
+    const partnerName = STATE.partnerConfig.partner_name || 'Partner';
+    
+    return `
+      <select class="lifecycle-select" onchange="APP.updateLifecycle('${m.id}', this.value)">
+        <option ${value === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
+        <option ${value === 'Churned' ? 'selected' : ''}>Churned</option>
+        <option ${value === `Live ${partnerName} Customer` ? 'selected' : ''}>Live ${partnerName} Customer</option>
+      </select>
+    `;
+  }
+
+  // Render workflow indicators (sequential, clickable)
+  function renderWorkflowIndicators(merchant, fields, actorLabel) {
+    const labels = {
+      si_contact_yes: 'Contact "Yes"',
+      si_intro_sent: 'Intro Sent',
+      partner_replied: 'Replied',
+      partner_booked: 'Booked',
+      partner_met: 'Met',
+      partner_sent_gift: 'Sent $',
+      partner_in_onboarding: 'In Onboarding',
+      partner_closed_won: 'Closed Won',
+      partner_closed_lost: 'Closed Lost',
+      partner_contact_yes: 'Contact "Yes"',
+      partner_intro_sent: 'Intro Sent',
+      si_booked: 'Booked',
+      si_met: 'Met',
+      si_sent_gift: 'Sent $',
+      si_in_onboarding: 'In Onboarding',
+      si_closed_won: 'Closed Won',
+      si_closed_lost: 'Closed Lost'
+    };
+    
     return `
       <div class="workflow-indicators">
-        <div class="workflow-step ${merchant.asked_date ? 'active' : ''}">
-          ${merchant.asked_date ? '✓' : '○'} Asked
-        </div>
-        <div class="workflow-step ${merchant.merchant_yes ? 'active' : ''}">
-          ${merchant.merchant_yes ? '✓' : '○'} Yes
-        </div>
-        <div class="workflow-step ${merchant.emailed_date ? 'active' : ''}">
-          ${merchant.emailed_date ? '✓' : '○'} Sent
-        </div>
+        ${fields.map(field => {
+          const active = merchant[field] || false;
+          const pending = hasPendingChange(merchant.id, field);
+          const bgStyle = pending ? 'background: #fff9c4;' : '';
+          
+          return `
+            <div class="workflow-step ${active ? 'active' : ''}" 
+                 style="cursor: pointer; ${bgStyle}" 
+                 onclick="APP.toggleWorkflowStep('${merchant.id}', '${field}')">
+              ${active ? '✓' : '○'} ${labels[field]}
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
   }
 
-  // Get action buttons based on workflow state
-  function getActionButtons(merchant) {
-    const tab = STATE.currentTab;
-    const isMaster = STATE.isMasterMode;
-    
-    // Reset button logic
-    const showReset = isMaster || tab === 'shipinsure-wishlist';
-    const resetBtn = showReset ? 
-      `<button class="btn-small btn-outline" onclick="APP.resetWorkflow('${merchant.id}')" style="margin-left: 4px;">Reset</button>` : '';
-    
-    // ShipInsure Pre-Opted In (partner view): Disqualify button only
-    if (tab === 'shipinsure-optin' && !isMaster) {
-      return `<button class="btn-small btn-outline" onclick="APP.disqualifyMerchant('${merchant.id}')">Disqualify</button>`;
-    }
-    
-    // Partner Wish List: No action buttons (dropdown handles it)
-    if (tab === 'partner-wishlist') {
-      return '-';
-    }
-    
-    // ShipInsure Wish List: Full workflow
-    if (tab === 'shipinsure-wishlist') {
-      if (!merchant.asked_date) {
-        return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
-      }
-      if (merchant.asked_date && !merchant.merchant_yes) {
-        return `<button class="btn-small btn-warning" onclick="APP.markYes('${merchant.id}')">Got Yes</button>${resetBtn}`;
-      }
-      if (merchant.merchant_yes && !merchant.emailed_date) {
-        return `<button class="btn-small btn-primary" onclick="APP.generateEmail('${merchant.id}')">📧 Email</button>${resetBtn}`;
-      }
-      return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
-    }
-    
-    // Master mode on other tabs: Full workflow
-    if (!merchant.asked_date) {
-      return `<button class="btn-small btn-info" onclick="APP.markAsked('${merchant.id}')">Mark Asked</button>${resetBtn}`;
-    }
-    if (merchant.asked_date && !merchant.merchant_yes) {
-      return `<button class="btn-small btn-warning" onclick="APP.markYes('${merchant.id}')">Got Yes</button>${resetBtn}`;
-    }
-    if (merchant.merchant_yes && !merchant.emailed_date) {
-      return `<button class="btn-small btn-primary" onclick="APP.generateEmail('${merchant.id}')">📧 Email</button>${resetBtn}`;
-    }
-    return `<span class="workflow-complete">✓ Complete</span>${resetBtn}`;
-  }
-
-  // Check if lifecycle can be edited
-  function canEditLifecycle(merchant) {
-    const tab = STATE.currentTab;
-    const isMaster = STATE.isMasterMode;
-    
-    // Master can edit everywhere
-    if (isMaster) return true;
-    
-    // Partner can edit on ShipInsure Wish List only
-    if (tab === 'shipinsure-wishlist') return true;
-    
-    return false;
-  }
-
-  // Get lifecycle options based on context
-  function getLifecycleOptions(merchant) {
-    const tab = STATE.currentTab;
-    const stage = merchant.lifecycle_stage;
-    
-    // ShipInsure Wish List: Partner-focused options
-    if (tab === 'shipinsure-wishlist' && !STATE.isMasterMode) {
-      return `
-        <option ${stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
-        <option ${stage === 'Customer' ? 'selected' : ''}>Customer</option>
-        <option ${stage === 'Churned' ? 'selected' : ''}>Churned</option>
-      `;
-    }
-    
-    // Master mode: Full options
+  // Render shared actions (Approve, Disqualify)
+  function renderSharedActions(merchant, isApproved) {
     return `
-      <option ${stage === 'In Deal Cycle' ? 'selected' : ''}>In Deal Cycle</option>
-      <option ${stage === 'Churned' ? 'selected' : ''}>Churned</option>
-      <option ${stage === 'Live ShipInsure Customer' ? 'selected' : ''}>Live ShipInsure Customer</option>
-      <option ${stage === 'Live EcoCart Customer' ? 'selected' : ''}>Live EcoCart Customer</option>
+      <button class="btn-small ${isApproved ? 'btn-success' : 'btn-outline'}" 
+              onclick="APP.toggleApproval('${merchant.id}')">
+        ${isApproved ? 'Approved' : 'Approve'}
+      </button>
+      <button class="btn-small btn-outline" 
+              onclick="APP.disqualifyMerchant('${merchant.id}')" 
+              style="margin-left: 4px;">
+        Disqualify
+      </button>
     `;
   }
 
@@ -396,28 +571,6 @@
       'Churned': 'secondary'
     };
     return map[lifecycle] || 'secondary';
-  }
-
-  // Check if approve button should show
-  function shouldShowApproveButton() {
-    const tab = STATE.currentTab;
-    const isMaster = STATE.isMasterMode;
-    
-    // Master sees approve everywhere except partner-wishlist
-    if (isMaster && tab !== 'partner-wishlist') return true;
-    
-    // Partner sees approve on Pre-Opted In only
-    if (!isMaster && tab === 'shipinsure-optin') return true;
-    
-    return false;
-  }
-
-  // Check if ICP can be edited
-  function canEditICP() {
-    if (STATE.isMasterMode) return true;
-    if (STATE.currentTab === 'shipinsure-optin') return true;
-    if (STATE.currentTab === 'partner-wishlist') return true;
-    return false;
   }
 
   // Update stats
@@ -444,16 +597,17 @@
     });
     
     // Update tab header
+    const partnerName = STATE.partnerConfig.partner_name || 'Partner';
     const titles = {
       'shipinsure-optin': 'ShipInsure Pre-Opted In',
-      'partner-wishlist': `${STATE.partnerConfig.partner_name} Wish List`,
+      'partner-wishlist': `${partnerName} Wish List`,
       'shipinsure-wishlist': 'ShipInsure Wish List'
     };
     
     const descriptions = {
       'shipinsure-optin': 'Merchants already opted in for partner introductions',
-      'partner-wishlist': `Merchants ${STATE.partnerConfig.partner_name} wants ShipInsure to introduce`,
-      'shipinsure-wishlist': `Merchants ShipInsure wants ${STATE.partnerConfig.partner_name} to introduce`
+      'partner-wishlist': `Merchants ${partnerName} wants ShipInsure to introduce`,
+      'shipinsure-wishlist': `Merchants ShipInsure wants ${partnerName} to introduce`
     };
     
     document.getElementById('tab-title').textContent = titles[tab];
@@ -462,16 +616,7 @@
     // Reset filters
     document.getElementById('search-input').value = '';
     document.getElementById('lifecycle-filter').value = 'All';
-    document.getElementById('icp-filter').value = 'All';
     document.getElementById('ae-filter').value = 'All';
-    
-    // Control Add Merchant button visibility
-    const addBtn = document.getElementById('add-merchant-btn');
-    if (addBtn) {
-      // Hide on shipinsure-optin for partners
-      const showAdd = STATE.isMasterMode || tab !== 'shipinsure-optin';
-      addBtn.style.display = showAdd ? 'inline-flex' : 'none';
-    }
     
     // Load merchants for new tab
     loadMerchants();
@@ -482,15 +627,17 @@
 
   // Subscribe to real-time changes
   function subscribeToChanges() {
-    // Unsubscribe from previous channel
     if (STATE.realtimeChannel) {
       DB.unsubscribe(STATE.realtimeChannel);
     }
     
-    // Subscribe to current tab
     STATE.realtimeChannel = DB.subscribeMerchants(STATE.currentTab, (payload) => {
       console.log('Real-time update:', payload);
-      loadMerchants(); // Reload merchants on any change
+      
+      // Only reload if change was made by partner (not by current admin)
+      if (!STATE.isMasterMode || payload.new?.partner_edited) {
+        loadMerchants();
+      }
     });
   }
 
@@ -498,7 +645,6 @@
   function applyFilters() {
     const search = document.getElementById('search-input').value.toLowerCase();
     const lifecycle = document.getElementById('lifecycle-filter').value;
-    const icp = document.getElementById('icp-filter').value;
     const ae = document.getElementById('ae-filter').value;
     
     STATE.filteredMerchants = STATE.merchants.filter(m => {
@@ -507,15 +653,12 @@
         (m.contact_name || '').toLowerCase().includes(search);
       
       const matchesLifecycle = lifecycle === 'All' || m.lifecycle_stage === lifecycle;
-      const matchesICP = icp === 'All' || m.icp_fit === icp;
       const matchesAE = ae === 'All' || m.ae_email === ae;
       
-      return matchesSearch && matchesLifecycle && matchesICP && matchesAE;
+      return matchesSearch && matchesLifecycle && matchesAE;
     });
     
-    // Apply sorting
     sortMerchants();
-    
     renderMerchants();
   }
 
@@ -527,7 +670,6 @@
       let aVal = a[sortColumn] || '';
       let bVal = b[sortColumn] || '';
       
-      // Handle string comparison
       if (typeof aVal === 'string') {
         aVal = aVal.toLowerCase();
         bVal = bVal.toLowerCase();
@@ -544,10 +686,8 @@
   // Sort by column
   function sortBy(column) {
     if (STATE.sortColumn === column) {
-      // Toggle direction
       STATE.sortDirection = STATE.sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      // New column, default to asc
       STATE.sortColumn = column;
       STATE.sortDirection = 'asc';
     }
@@ -557,12 +697,10 @@
 
   // Update sort indicators
   function updateSortIndicators() {
-    // Clear all indicators
     document.querySelectorAll('.sort-indicator').forEach(el => {
       el.textContent = '';
     });
     
-    // Set active indicator
     const indicator = document.getElementById(`sort-${STATE.sortColumn}`);
     if (indicator) {
       indicator.textContent = STATE.sortDirection === 'asc' ? '↑' : '↓';
@@ -582,40 +720,18 @@
       aes.map(ae => `<option value="${ae}">${ae.split('@')[0]}</option>`).join('');
   }
 
-  // Update ICP
-  async function updateICP(id, icp) {
-    try {
-      await DB.updateMerchant(id, { icp_fit: icp });
-      console.log('ICP updated');
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error updating ICP:', err);
-      alert('Failed to update ICP');
-    }
-  }
-
   // Update lifecycle stage
-  async function updateLifecycle(id, lifecycle) {
-    try {
-      await DB.updateMerchant(id, { lifecycle_stage: lifecycle });
-      console.log('Lifecycle updated');
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error updating lifecycle:', err);
-      alert('Failed to update lifecycle');
-    }
+  function updateLifecycle(id, lifecycle) {
+    trackPendingChange(id, 'lifecycle_stage', lifecycle);
   }
 
-  // Update partner status
-  async function updatePartnerStatus(id, status) {
-    try {
-      await DB.updateMerchant(id, { partner_status: status });
-      console.log('Partner status updated');
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error updating partner status:', err);
-      alert('Failed to update partner status');
-    }
+  // Toggle workflow step
+  function toggleWorkflowStep(id, field) {
+    const merchant = STATE.merchants.find(m => m.id === id);
+    if (!merchant) return;
+    
+    const currentValue = merchant[field] || false;
+    trackPendingChange(id, field, !currentValue);
   }
 
   // Disqualify merchant
@@ -624,36 +740,10 @@
       return;
     }
     
-    try {
-      await DB.updateMerchant(id, { 
-        icp_fit: 'ICP 3 (Not a Fit)',
-        approved: false
-      });
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error disqualifying merchant:', err);
-      alert('Failed to disqualify merchant');
-    }
-  }
-
-  // Reset workflow and approval to defaults
-  async function resetWorkflow(id) {
-    if (!confirm('Reset this merchant\'s workflow and approval status?')) {
-      return;
-    }
-    
-    try {
-      await DB.updateMerchant(id, {
-        approved: false,
-        asked_date: null,
-        merchant_yes: false,
-        emailed_date: null,
-        partner_status: null
-      });
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error resetting workflow:', err);
-      alert('Failed to reset workflow');
+    if (STATE.isMasterMode) {
+      trackPendingChange(id, 'approved', false);
+    } else {
+      await updateMerchantField(id, 'approved', false, true);
     }
   }
 
@@ -661,7 +751,6 @@
   async function toggleApproval(id) {
     try {
       const merchant = STATE.merchants.find(m => m.id === id);
-      const tab = STATE.currentTab;
       const isApproved = STATE.partnerApprovals.includes(id);
       
       if (isApproved) {
@@ -672,7 +761,7 @@
       // Add to partner_approvals table
       await DB.addPartnerApproval(id, STATE.partnerConfig.partner_slug);
       
-      // Create copy in partner wishlist WITH partner_slug
+      // Create copy in partner wishlist
       const copy = {
         name: merchant.name,
         url: merchant.url,
@@ -680,9 +769,8 @@
         contact_title: merchant.contact_title,
         contact_email: merchant.contact_email,
         lifecycle_stage: merchant.lifecycle_stage,
-        icp_fit: merchant.icp_fit,
         ae_email: merchant.ae_email,
-        notes: `[SI Pre Opt-In] ${merchant.notes || ''}`.trim(),
+        notes: merchant.notes,
         source_tab: 'partner-wishlist',
         partner_slug: STATE.partnerConfig.partner_slug,
         approved: true,
@@ -696,114 +784,21 @@
       
       alert('✅ Merchant approved and added to partner wish list!');
       await loadPartnerApprovals();
-      await loadMerchants(); // Refresh UI immediately
+      await loadMerchants();
     } catch (err) {
       console.error('Error toggling approval:', err);
       alert('Failed to update approval');
     }
   }
 
-  // Mark as asked
-  async function markAsked(id) {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      await DB.updateMerchant(id, { asked_date: today });
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error marking as asked:', err);
-      alert('Failed to update');
-    }
-  }
-
-  // Mark merchant yes
-  async function markYes(id) {
-    try {
-      await DB.updateMerchant(id, { merchant_yes: true });
-      await loadMerchants(); // Refresh UI immediately
-    } catch (err) {
-      console.error('Error marking yes:', err);
-      alert('Failed to update');
-    }
-  }
-
-  // Generate email
-  function generateEmail(id) {
-    const merchant = STATE.merchants.find(m => m.id === id);
-    if (!merchant) return;
-    
-    STATE.selectedMerchant = merchant;
-    
-    const template = STATE.templates[STATE.currentTab];
-    if (!template) {
-      alert('Template not found');
-      return;
-    }
-    
-    const firstName = (merchant.contact_name || '').split(' ')[0] || 'there';
-    const partnerName = STATE.partnerConfig.partner_name;
-    
-    let subject = template.subject || '';
-    let body = template.body || '';
-    
-    // Replace variables
-    const replacements = {
-      '{merchant_name}': merchant.name,
-      '{first_name}': firstName,
-      '{partner_name}': partnerName,
-      '{partner_rep}': '[Partner Rep Name]',
-      '{partner_focus}': '[partner focus area]',
-      '{partner_solution}': '[what partner solves]',
-      '{shipinsure_rep}': '[ShipInsure Rep]',
-      '{partner_value_prop}': '[Partner value proposition]'
-    };
-    
-    Object.entries(replacements).forEach(([key, value]) => {
-      subject = subject.replaceAll(key, value);
-      body = body.replaceAll(key, value);
-    });
-    
-    document.getElementById('email-subject').textContent = subject;
-    document.getElementById('email-body').textContent = body;
-    document.getElementById('email-modal').style.display = 'flex';
-  }
-
-  // Copy email to clipboard
-  function copyEmail() {
-    const subject = document.getElementById('email-subject').textContent;
-    const body = document.getElementById('email-body').textContent;
-    const fullEmail = `Subject: ${subject}\n\n${body}`;
-    
-    navigator.clipboard.writeText(fullEmail).then(() => {
-      alert('Email copied to clipboard!');
-    });
-  }
-
-  // Copy and mark as sent
-  async function copyAndMarkSent() {
-    copyEmail();
-    
-    if (STATE.selectedMerchant) {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        await DB.updateMerchant(STATE.selectedMerchant.id, { emailed_date: today });
-        closeModal('email-modal');
-        await loadMerchants(); // Refresh UI immediately
-      } catch (err) {
-        console.error('Error marking as emailed:', err);
-      }
-    }
-  }
-
   // Show add modal
   function showAddModal() {
-    // Clear form
     document.getElementById('new-name').value = '';
     document.getElementById('new-url').value = '';
     document.getElementById('new-contact-name').value = '';
     document.getElementById('new-contact-title').value = '';
     document.getElementById('new-contact-email').value = '';
     document.getElementById('new-lifecycle').value = 'In Deal Cycle';
-    document.getElementById('new-icp').value = 'Not Sure';
     document.getElementById('new-ae').value = 'drew@shipinsure.io';
     document.getElementById('new-notes').value = '';
     
@@ -827,7 +822,6 @@
       contact_name: contactName,
       contact_title: document.getElementById('new-contact-title').value.trim(),
       contact_email: document.getElementById('new-contact-email').value.trim(),
-      icp_fit: document.getElementById('new-icp').value,
       ae_email: document.getElementById('new-ae').value.trim(),
       notes: document.getElementById('new-notes').value.trim(),
       source_tab: STATE.currentTab,
@@ -838,7 +832,6 @@
       emailed_date: null
     };
     
-    // Set partner_slug for partner-wishlist
     if (STATE.currentTab === 'partner-wishlist') {
       merchant.partner_slug = STATE.partnerConfig.partner_slug;
     }
@@ -850,349 +843,6 @@
     } catch (err) {
       console.error('Error adding merchant:', err);
       alert('Failed to add merchant');
-    }
-  }
-
-  // Handle CSV upload
-  async function handleCSVUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(l => l.trim());
-      
-      if (lines.length < 2) {
-        alert('CSV file is empty or invalid');
-        return;
-      }
-      
-      // Parse CSV (handle quoted fields)
-      const parseCSVLine = (line) => {
-        const result = [];
-        let current = '';
-        let inQuotes = false;
-        
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        result.push(current.trim());
-        return result;
-      };
-      
-      const headers = parseCSVLine(lines[0]);
-      const rows = lines.slice(1).map(parseCSVLine);
-      
-      // Store parsed data
-      STATE.csvImport = { headers, rows };
-      
-      // Show mapper modal
-      showCSVMapper(headers);
-      
-    } catch (err) {
-      console.error('Error reading CSV:', err);
-      alert('Failed to read CSV file');
-    }
-    
-    event.target.value = ''; // Reset file input
-  }
-
-  // Show CSV mapper modal
-  function showCSVMapper(headers) {
-    const fields = [
-      { key: 'name', label: 'Company/Merchant Name', required: true },
-      { key: 'contactName', label: 'Contact Name', required: false },
-      { key: 'contactEmail', label: 'Contact Email', required: false },
-      { key: 'contactTitle', label: 'Contact Title', required: false },
-      { key: 'lifecycleStage', label: 'Lifecycle Stage', required: false },
-      { key: 'icpFit', label: 'ICP Fit', required: false },
-      { key: 'aeEmail', label: 'AE/Owner', required: false },
-      { key: 'optinDate', label: 'Opt-in Date', required: false },
-      { key: 'notes', label: 'Notes', required: false }
-    ];
-    
-    // Auto-detect mappings
-    const mapping = {};
-    const headersLower = headers.map(h => h.toLowerCase().trim());
-    
-    fields.forEach(field => {
-      const patterns = {
-        name: ['company name', 'merchant name', 'company', 'merchant', 'ticket name', 'name'],
-        contactName: ['contact name', 'contact', 'ticket name', 'name'],
-        contactEmail: ['contact email', 'email'],
-        contactTitle: ['contact title', 'title', 'job title'],
-        lifecycleStage: ['lifecycle stage', 'lifecycle', 'stage', 'ticket status', 'status'],
-        icpFit: ['icp fit', 'icp', 'fit'],
-        aeEmail: ['ae owner', 'ae', 'owner', 'ticket owner', 'assigned to'],
-        optinDate: ['opt-in date', 'optin date', 'create date', 'created', 'date'],
-        notes: ['notes', 'description', 'comments']
-      };
-      
-      const matchPatterns = patterns[field.key] || [];
-      const found = headersLower.findIndex(h => 
-        matchPatterns.some(p => h.includes(p) || p.includes(h))
-      );
-      
-      if (found >= 0) mapping[field.key] = found;
-    });
-    
-    STATE.csvMapping = mapping;
-    
-    // Render mapper
-    const container = document.getElementById('csv-mapper-fields');
-    container.innerHTML = fields.map(field => `
-      <div class="mapper-row">
-        <label>${field.label}${field.required ? ' *' : ''}</label>
-        <select class="csv-field-select" data-field="${field.key}">
-          <option value="">-- Skip --</option>
-          ${headers.map((h, i) => `
-            <option value="${i}" ${mapping[field.key] === i ? 'selected' : ''}>${h}</option>
-          `).join('')}
-        </select>
-      </div>
-    `).join('');
-    
-    // Add change listeners
-    container.querySelectorAll('.csv-field-select').forEach(select => {
-      select.addEventListener('change', () => {
-        const field = select.dataset.field;
-        STATE.csvMapping[field] = select.value === '' ? undefined : parseInt(select.value);
-      });
-    });
-    
-    document.getElementById('csv-mapper-modal').style.display = 'flex';
-  }
-
-  // Confirm CSV mapping and import
-  async function confirmCSVMapping() {
-    const { headers, rows } = STATE.csvImport;
-    const mapping = STATE.csvMapping;
-    
-    // Validate required fields
-    if (mapping.name === undefined && mapping.contactName === undefined) {
-      alert('You must map either Company Name or Contact Name');
-      return;
-    }
-    
-    const merchants = [];
-    
-    for (const row of rows) {
-      const getValue = (key) => {
-        const idx = mapping[key];
-        return idx !== undefined ? (row[idx] || '').trim() : '';
-      };
-      
-      // Use company name, or fall back to contact name if no company
-      const companyName = getValue('name') || getValue('contactName') || 'Unknown';
-      const contactName = getValue('contactName') || getValue('name') || '';
-      
-      const merchant = {
-        name: companyName,
-        contact_name: contactName,
-        contact_email: getValue('contactEmail'),
-        contact_title: getValue('contactTitle'),
-        lifecycle_stage: getValue('lifecycleStage') || 'In Deal Cycle',
-        icp_fit: getValue('icpFit') || 'Not Sure',
-        ae_email: getValue('aeEmail') || '',
-        notes: getValue('notes'),
-        source_tab: 'shipinsure-optin',
-        approved: false,
-        partner_status: null,
-        asked_date: getValue('optinDate') || null,
-        merchant_yes: false,
-        emailed_date: null,
-        url: ''
-      };
-      
-      // Don't set partner_slug for shipinsure-optin imports
-      
-      if (merchant.name) merchants.push(merchant);
-    }
-    
-    if (merchants.length === 0) {
-      alert('No valid merchants found in CSV');
-      return;
-    }
-    
-    try {
-      await DB.bulkUpsertMerchants(merchants);
-      
-      closeModal('csv-mapper-modal');
-      alert(`Imported ${merchants.length} merchants successfully!`);
-      
-      // Reload list
-      await loadMerchants();
-    } catch (err) {
-      console.error('Import error:', err);
-      alert('Failed to import: ' + err.message);
-    }
-  }
-
-  // Clear all data (delete activity logs first, then merchants)
-  async function clearAllData() {
-    if (!confirm('⚠️ This will DELETE ALL merchants and activity logs from the current tab. This cannot be undone. Are you sure?')) {
-      return;
-    }
-    
-    try {
-      const tabName = STATE.currentTab;
-      const result = await DB.clearTabData(tabName);
-      
-      if (result.deleted === 0) {
-        alert('No data to clear');
-        return;
-      }
-      
-      alert(`✅ Deleted ${result.deleted} merchants and their activity logs`);
-      
-      // Reload
-      await loadMerchants();
-      
-    } catch (err) {
-      console.error('Error clearing data:', err);
-      alert('Failed to clear data: ' + err.message);
-    }
-  }
-
-  // Export CSV
-  function exportCSV() {
-    const headers = ['Name', 'URL', 'Lifecycle', 'Contact Name', 'Contact Title', 'Contact Email', 'ICP Fit', 'AE', 'Notes'];
-    const rows = STATE.filteredMerchants.map(m => [
-      m.name,
-      m.url || '',
-      m.lifecycle_stage,
-      m.contact_name || '',
-      m.contact_title || '',
-      m.contact_email || '',
-      m.icp_fit,
-      m.ae_email || '',
-      m.notes || ''
-    ]);
-    
-    const csv = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${STATE.currentTab}-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-  }
-
-  // Show branding modal
-  function showBrandingModal() {
-    document.getElementById('branding-name').value = STATE.partnerConfig.partner_name;
-    document.getElementById('master-mode').checked = STATE.isMasterMode;
-    document.getElementById('branding-modal').style.display = 'flex';
-  }
-
-  // Handle logo upload
-  function handleLogoUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const logoUrl = e.target.result;
-      document.getElementById('logo-preview-img').src = logoUrl;
-      document.getElementById('logo-preview').style.display = 'block';
-      STATE.partnerConfig.logo_base64 = logoUrl;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // Save branding
-  async function saveBranding() {
-    const partnerName = document.getElementById('branding-name').value.trim();
-    
-    if (!partnerName) {
-      alert('Partner name is required');
-      return;
-    }
-    
-    try {
-      const updates = {
-        partner_name: partnerName
-      };
-      
-      if (STATE.partnerConfig.logo_base64) {
-        updates.logo_url = STATE.partnerConfig.logo_base64;
-      }
-      
-      await DB.updatePartnerConfig(STATE.partnerConfig.partner_slug, updates);
-      await loadPartnerConfig(STATE.partnerConfig.partner_slug);
-      closeModal('branding-modal');
-      alert('Branding saved!');
-    } catch (err) {
-      console.error('Error saving branding:', err);
-      alert('Failed to save branding');
-    }
-  }
-
-  // Toggle master mode
-  function toggleMasterMode(enabled) {
-    STATE.isMasterMode = enabled;
-    document.getElementById('master-controls').style.display = enabled ? 'flex' : 'none';
-    document.querySelectorAll('.master-only').forEach(el => {
-      el.style.display = enabled ? '' : 'none';
-    });
-  }
-
-  // Show template editor
-  function showTemplateEditor() {
-    // Load current templates into form
-    if (STATE.templates['shipinsure-optin']) {
-      document.getElementById('template-optin-subject').value = STATE.templates['shipinsure-optin'].subject || '';
-      document.getElementById('template-optin-body').value = STATE.templates['shipinsure-optin'].body || '';
-    }
-    
-    if (STATE.templates['partner-wishlist']) {
-      document.getElementById('template-partner-subject').value = STATE.templates['partner-wishlist'].subject || '';
-      document.getElementById('template-partner-body').value = STATE.templates['partner-wishlist'].body || '';
-    }
-    
-    if (STATE.templates['shipinsure-wishlist']) {
-      document.getElementById('template-shipinsure-subject').value = STATE.templates['shipinsure-wishlist'].subject || '';
-      document.getElementById('template-shipinsure-body').value = STATE.templates['shipinsure-wishlist'].body || '';
-    }
-    
-    document.getElementById('template-modal').style.display = 'flex';
-  }
-
-  // Save templates
-  async function saveTemplates() {
-    try {
-      await DB.updateTemplate('shipinsure-optin', {
-        subject: document.getElementById('template-optin-subject').value,
-        body: document.getElementById('template-optin-body').value
-      });
-      
-      await DB.updateTemplate('partner-wishlist', {
-        subject: document.getElementById('template-partner-subject').value,
-        body: document.getElementById('template-partner-body').value
-      });
-      
-      await DB.updateTemplate('shipinsure-wishlist', {
-        subject: document.getElementById('template-shipinsure-subject').value,
-        body: document.getElementById('template-shipinsure-body').value
-      });
-      
-      await loadTemplates();
-      closeModal('template-modal');
-      alert('Templates saved!');
-    } catch (err) {
-      console.error('Error saving templates:', err);
-      alert('Failed to save templates');
     }
   }
 
@@ -1208,29 +858,14 @@
     handleSearch,
     applyFilters,
     sortBy,
-    updateICP,
     updateLifecycle,
-    updatePartnerStatus,
+    toggleWorkflowStep,
     disqualifyMerchant,
-    resetWorkflow,
     toggleApproval,
-    markAsked,
-    markYes,
-    generateEmail,
-    copyEmail,
-    copyAndMarkSent,
     showAddModal,
     addMerchant,
-    handleCSVUpload,
-    confirmCSVMapping,
-    clearAllData,
-    exportCSV,
-    showBrandingModal,
-    handleLogoUpload,
-    saveBranding,
-    toggleMasterMode,
-    showTemplateEditor,
-    saveTemplates,
+    saveAllChanges,
+    createNewPartner,
     closeModal
   };
 
