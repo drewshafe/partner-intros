@@ -742,7 +742,7 @@
       function updateTableHeaders() {
         const activeTab = document.querySelector('.tab.active')?.dataset.tab;
         const tableHead = document.getElementById('table-head');
-        const partnerName = document.getElementById('partner-name')?.textContent || 'Partner';
+        const partnerName = window.APP?.STATE?.partnerConfig?.partner_name || 'Partner';
         
         if (!tableHead || !activeTab) return;
         
