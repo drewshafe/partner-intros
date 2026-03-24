@@ -135,6 +135,23 @@ const DB = (function() {
     if (error) throw error;
   }
 
+  // Restore an old-pattern wish list record back to the Pre-Opted In pool
+  // Used for records that were moved (not copied) before the copy+claim pattern existed
+  async function restoreMerchantToOptinPool(merchantId) {
+    const { error } = await supabase
+      .from('merchants')
+      .update({
+        source_tab: 'shipinsure-optin',
+        partner_slug: null,
+        claimed_by_partner: null,
+        claimed_at: null,
+        from_optin: false,
+        approved: false
+      })
+      .eq('id', merchantId);
+    if (error) throw error;
+  }
+
   async function getStats(tab) {
     const { data, error } = await supabase
       .from('merchants')
@@ -261,6 +278,7 @@ const DB = (function() {
     bulkUpsertMerchants,
     claimMerchantForPartner,
     unclaimMerchant,
+    restoreMerchantToOptinPool,
     getPartnerApprovals,
     addPartnerApproval,
     getPartnerDisqualifications,
