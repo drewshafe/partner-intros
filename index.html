@@ -123,6 +123,7 @@
 
   <!-- Main merchants content -->
   <div class="content" id="main-content">
+    <div id="spiff-banner" style="display:none;margin-bottom:16px;"></div>
     <div class="tab-header">
       <h2 id="tab-title">ShipInsure Pre-Opted In</h2>
       <p id="tab-description">Merchants opted in for partner introductions. Approving a merchant moves it to your Wish List.</p>
@@ -261,19 +262,54 @@
     </div>
 
     <div class="form-group" style="margin-top:20px;">
-      <label>Spiff Config (JSON)</label>
+      <label>Standard Spiff Config (JSON)</label>
       <textarea class="code" id="settings-spiff-config" placeholder='{
   "per_intro_amount": 300,
   "merchant_portion": 200,
   "rep_portion": 100,
   "trigger": "demo_met",
-  "gift_card_type": "Amazon",
+  "gift_card_type": "Link"
+}'></textarea>
+      <small>Per-intro SI AE spiff terms. Leave blank if no standard program.</small>
+    </div>
+
+    <div class="form-group" style="margin-top:16px;">
+      <label>Bonus Spiff Config (JSON)</label>
+      <textarea class="code" id="settings-bonus-spiff-config" placeholder='{
   "volume_bonuses": [
     { "threshold": 7, "period": "2026-03", "bonus": 500 },
     { "threshold": 10, "period": "2026-03", "bonus": 1000 }
   ]
 }'></textarea>
-      <small>Leave blank if this partner has no active spiff program. Changes save immediately.</small>
+      <small>Time-limited volume bonus config (e.g. March bonuses). Leave blank if no bonus program.</small>
+    </div>
+
+    <div class="form-group" style="margin-top:16px;">
+      <label>Partner Rep Spiff Config (JSON)</label>
+      <textarea class="code" id="settings-partner-spiff-config" placeholder='{
+  "per_intro_amount": 200,
+  "trigger": "demo_met",
+  "gift_card_type": "Tremendous",
+  "expiry": "2026-03-31",
+  "target_merchants": ["Merchant A", "Merchant B"]
+}'></textarea>
+      <small>Spiff paid to partner reps for introducing ShipInsure. Leave blank if not applicable.</small>
+    </div>
+
+    <div class="toggle-row" style="margin-top:20px;">
+      <div>
+        <label>Show SI AE Spiff Banner on Partner Wish List</label>
+        <small>Displays spiff callout + log button docked above the partner wish list tab</small>
+      </div>
+      <input type="checkbox" id="settings-show-si-spiff">
+    </div>
+
+    <div class="toggle-row" style="margin-top:12px;">
+      <div>
+        <label>Show Partner Rep Spiff Banner on SI Wish List</label>
+        <small>Displays spiff callout + log button docked above the SI wish list tab</small>
+      </div>
+      <input type="checkbox" id="settings-show-partner-spiff">
     </div>
 
     <div class="modal-actions">
@@ -286,13 +322,14 @@
 <!-- Log Spiff (master only) -->
 <div id="log-spiff-modal" class="modal" style="display:none;">
   <div class="modal-content">
-    <h2>💰 Log AE Spiff</h2>
+    <h2 id="log-spiff-modal-title">💰 Log SI AE Spiff</h2>
+    <input type="hidden" id="spiff-direction" value="si_ae">
 
     <div class="form-group"><label>Merchant Name *</label><input type="text" id="spiff-merchant-name" placeholder="Acme Corp"></div>
 
     <div class="form-row">
-      <div class="form-group"><label>AE Name</label><input type="text" id="spiff-ae-name" placeholder="Clara Hayes"></div>
-      <div class="form-group"><label>AE Email</label><input type="email" id="spiff-ae-email" placeholder="clara@partner.com"></div>
+      <div class="form-group"><label>Rep / AE Name</label><input type="text" id="spiff-ae-name" placeholder="Clara Hayes"></div>
+      <div class="form-group"><label>Rep / AE Email</label><input type="email" id="spiff-ae-email" placeholder="clara@partner.com"></div>
     </div>
 
     <div class="form-row">
@@ -315,6 +352,7 @@
       <div class="form-group"><label>Amount ($) *</label><input type="number" id="spiff-amount" placeholder="300" min="0" step="0.01"></div>
       <div class="form-group"><label>Gift Card Type</label>
         <select id="spiff-gift-card-type">
+          <option value="Link">Link</option>
           <option value="Amazon">Amazon</option>
           <option value="Visa">Visa</option>
           <option value="Tremendous">Tremendous</option>
@@ -324,7 +362,7 @@
     </div>
 
     <div class="form-row">
-      <div class="form-group"><label>Gift Card Code</label><input type="text" id="spiff-gift-card-code" placeholder="Optional — for your records"></div>
+      <div class="form-group"><label>Gift Card Code / Link</label><input type="text" id="spiff-gift-card-code" placeholder="Optional — URL or code"></div>
       <div class="form-group"><label>Date Sent</label><input type="date" id="spiff-sent-date"></div>
     </div>
 
