@@ -4,834 +4,387 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Partner Intros - ShipInsure</title>
-  
-  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #f5f7fa;
-      color: #2c3e50;
-      line-height: 1.6;
-    }
-    
-    .container {
-      max-width: 1600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    
-    header {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    
-    .logo-section {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    
-    #partner-logo {
-      max-height: 50px;
-      max-width: 150px;
-      display: none;
-    }
-    
-    #shipinsure-logo {
-      max-height: 40px;
-      max-width: 200px;
-    }
-    
-    #logo-placeholder {
-      width: 50px;
-      height: 50px;
-      background: #e0e0e0;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-    }
-    
-    .header-title {
-      font-size: 20px;
-      font-weight: 600;
-      color: #2c3e50;
-    }
-    
-    .controls {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-    
-    #master-controls {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-    
-    .tabs {
-      display: flex;
-      gap: 8px;
-      background: white;
-      padding: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
-    }
-    
-    .tab {
-      padding: 10px 20px;
-      border: none;
-      background: #f5f7fa;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-    
-    .tab:hover {
-      background: #e8ecf1;
-    }
-    
-    .tab.active {
-      background: #3498db;
-      color: white;
-    }
-    
-    .content {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .tab-header {
-      margin-bottom: 20px;
-    }
-    
-    .tab-header h2 {
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
-    
-    .tab-header p {
-      color: #7f8c8d;
-      font-size: 14px;
-    }
-    
-    .filters {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    
-    .filters input,
-    .filters select {
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    
-    .filters input {
-      flex: 1;
-      min-width: 200px;
-    }
-    
-    .stats {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 20px;
-      padding: 16px;
-      background: #f8f9fa;
-      border-radius: 6px;
-    }
-    
-    .stat-item {
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .stat-item label {
-      font-size: 12px;
-      color: #7f8c8d;
-      font-weight: 500;
-    }
-    
-    .stat-item span {
-      font-size: 20px;
-      font-weight: 600;
-      color: #2c3e50;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    
-    thead {
-      background: #f8f9fa;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    
-    th {
-      padding: 12px 8px;
-      text-align: left;
-      font-weight: 600;
-      color: #2c3e50;
-      border-bottom: 2px solid #dee2e6;
-      cursor: pointer;
-      user-select: none;
-    }
-    
-    th:hover {
-      background: #e9ecef;
-    }
-    
-    .sort-indicator {
-      margin-left: 4px;
-      color: #3498db;
-    }
-    
-    td {
-      padding: 12px 8px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    
-    tr:hover {
-      background: #f8f9fa;
-    }
-    
-    .merchant-link {
-      color: #3498db;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    
-    .merchant-link:hover {
-      text-decoration: underline;
-    }
-    
-    .contact-name {
-      font-weight: 500;
-      color: #2c3e50;
-    }
-    
-    .contact-title {
-      font-size: 11px;
-      color: #7f8c8d;
-    }
-    
-    .contact-email {
-      font-size: 11px;
-      color: #7f8c8d;
-    }
-    
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    
-    .badge-success {
-      background: #d4edda;
-      color: #155724;
-    }
-    
-    .badge-info {
-      background: #d1ecf1;
-      color: #0c5460;
-    }
-    
-    .badge-warning {
-      background: #fff3cd;
-      color: #856404;
-    }
-    
-    .badge-secondary {
-      background: #e2e3e5;
-      color: #383d41;
-    }
-    
-    .badge-purple {
-      background: #e7d4f7;
-      color: #6a1b9a;
-    }
-    
-    select.lifecycle-select,
-    select.icp-select {
-      padding: 4px 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    
-    .workflow-indicators {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    
-    .workflow-step {
-      display: inline-block;
-      padding: 4px 8px;
-      margin: 2px;
-      border-radius: 4px;
-      background: #f5f5f5;
-      font-size: 11px;
-      transition: all 0.2s;
-    }
-    
-    .workflow-step.active {
-      background: #4caf50;
-      color: white;
-    }
-    
-    .workflow-step:hover {
-      background: #e0e0e0;
-    }
-    
-    .workflow-step.active:hover {
-      background: #45a049;
-    }
-    
-    .workflow-complete {
-      color: #28a745;
-      font-weight: 600;
-      font-size: 12px;
-    }
-    
-    .btn-small {
-      padding: 6px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .btn-outline {
-      background: white;
-      color: #495057;
-    }
-    
-    .btn-outline:hover {
-      background: #f8f9fa;
-    }
-    
-    .btn-info {
-      background: #17a2b8;
-      color: white;
-      border-color: #17a2b8;
-    }
-    
-    .btn-warning {
-      background: #ffc107;
-      color: #212529;
-      border-color: #ffc107;
-    }
-    
-    .btn-primary {
-      background: #3498db;
-      color: white;
-      border-color: #3498db;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-    }
-    
-    .btn-primary:hover {
-      background: #2980b9;
-    }
-    
-    .btn-primary:disabled {
-      background: #95a5a6;
-      cursor: not-allowed;
-    }
-    
-    .btn-success {
-      background: #28a745;
-      color: white;
-      border-color: #28a745;
-    }
-    
-    .loading,
-    .empty,
-    .error {
-      text-align: center;
-      padding: 40px;
-      color: #7f8c8d;
-    }
-    
-    .error {
-      color: #e74c3c;
-    }
-    
-    .modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    
-    .modal-content {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      max-width: 600px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    
-    .modal-content h2 {
-      margin-bottom: 20px;
-    }
-    
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      font-size: 14px;
-    }
-    
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 14px;
-      font-family: inherit;
-    }
-    
-    .form-group textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-    
-    .form-group small {
-      display: block;
-      margin-top: 4px;
-      font-size: 12px;
-      color: #7f8c8d;
-    }
-    
-    .modal-actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 24px;
-    }
-    
-    .email-preview {
-      background: #f8f9fa;
-      padding: 16px;
-      border-radius: 6px;
-      margin-bottom: 16px;
-    }
-    
-    .email-preview strong {
-      display: block;
-      margin-bottom: 8px;
-    }
-    
-    #email-body {
-      white-space: pre-wrap;
-      font-family: inherit;
-    }
-    
-    .mapper-row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    
-    .mapper-row label {
-      flex: 1;
-      font-size: 13px;
-    }
-    
-    .csv-field-select {
-      flex: 1;
-      padding: 6px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    
-    #logo-preview {
-      margin-top: 12px;
-      display: none;
-    }
-    
-    #logo-preview-img {
-      max-width: 200px;
-      max-height: 100px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    
-    .master-only {
-      /* Will be hidden for partner users via JS */
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #2c3e50; line-height: 1.6; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+    header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+    .logo-section { display: flex; align-items: center; gap: 16px; }
+    #partner-logo { max-height: 50px; max-width: 150px; display: none; }
+    #shipinsure-logo { max-height: 40px; max-width: 200px; }
+    .header-title { font-size: 20px; font-weight: 600; color: #2c3e50; }
+    .controls { display: flex; gap: 12px; align-items: center; }
+    #master-controls { display: flex; gap: 12px; align-items: center; }
+    .tabs { display: flex; gap: 8px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; flex-wrap: wrap; }
+    .tab { padding: 10px 20px; border: none; background: #f5f7fa; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .tab:hover { background: #e8ecf1; }
+    .tab.active { background: #3498db; color: white; }
+    .content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .tab-header { margin-bottom: 20px; }
+    .tab-header h2 { font-size: 20px; margin-bottom: 8px; }
+    .tab-header p { color: #7f8c8d; font-size: 14px; }
+    .filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filters input, .filters select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+    .filters input { flex: 1; min-width: 200px; }
+    .stats { display: flex; gap: 20px; margin-bottom: 20px; padding: 16px; background: #f8f9fa; border-radius: 6px; }
+    .stat-item { display: flex; flex-direction: column; }
+    .stat-item label { font-size: 12px; color: #7f8c8d; font-weight: 500; }
+    .stat-item span { font-size: 20px; font-weight: 600; color: #2c3e50; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: #f8f9fa; position: sticky; top: 0; z-index: 10; }
+    th { padding: 12px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #dee2e6; cursor: pointer; user-select: none; }
+    th:hover { background: #e9ecef; }
+    .sort-indicator { margin-left: 4px; color: #3498db; }
+    td { padding: 12px 8px; border-bottom: 1px solid #f0f0f0; }
+    tr:hover { background: #f8f9fa; }
+    .merchant-link { color: #3498db; text-decoration: none; font-weight: 500; }
+    .merchant-link:hover { text-decoration: underline; }
+    .contact-name { font-weight: 500; color: #2c3e50; }
+    .contact-title, .contact-email { font-size: 11px; color: #7f8c8d; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-info { background: #d1ecf1; color: #0c5460; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-secondary { background: #e2e3e5; color: #383d41; }
+    .badge-purple { background: #e7d4f7; color: #6a1b9a; }
+    select.lifecycle-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .workflow-indicators { display: flex; flex-direction: column; gap: 4px; }
+    .workflow-step { display: inline-block; padding: 4px 8px; border-radius: 4px; background: #f5f5f5; font-size: 11px; transition: all 0.2s; }
+    .workflow-step.active { background: #4caf50; color: white; }
+    .workflow-step:hover { background: #e0e0e0; }
+    .workflow-step.active:hover { background: #45a049; }
+    .btn-small { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+    .btn-outline { background: white; color: #495057; }
+    .btn-outline:hover { background: #f8f9fa; }
+    .btn-info { background: #17a2b8; color: white; border-color: #17a2b8; }
+    .btn-warning { background: #ffc107; color: #212529; border-color: #ffc107; }
+    .btn-primary { background: #3498db; color: white; border-color: #3498db; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-primary:hover { background: #2980b9; }
+    .btn-primary:disabled { background: #95a5a6; cursor: not-allowed; }
+    .btn-success { background: #28a745; color: white; border-color: #28a745; }
+    .btn-settings { background: #6c757d; color: white; border: none; padding: 10px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; display: none; }
+    .btn-settings:hover { background: #5a6268; }
+    .loading, .empty, .error { text-align: center; padding: 40px; color: #7f8c8d; }
+    .error { color: #e74c3c; }
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+    .modal-content h2 { margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .form-group textarea.code { font-family: monospace; min-height: 140px; font-size: 12px; }
+    .form-group small { display: block; margin-top: 4px; font-size: 12px; color: #7f8c8d; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+    .toggle-row label { font-size: 14px; font-weight: 500; }
+    .toggle-row small { font-size: 12px; color: #7f8c8d; display: block; }
+    input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+    .email-preview { background: #f8f9fa; padding: 16px; border-radius: 6px; margin-bottom: 16px; }
+    .email-preview strong { display: block; margin-bottom: 8px; }
+    #email-body { white-space: pre-wrap; font-family: inherit; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div class="logo-section">
-        <div id="logo-placeholder" style="display: none;">🤝</div>
-        <img id="partner-logo" alt="Partner Logo">
-        <img id="shipinsure-logo" src="https://drewshafe.github.io/partner-intros/shipinsure-logo-dark.png" alt="ShipInsure">
-        <span class="header-title" id="header-title">Partner Portal</span>
-      </div>
-      
-      <div class="controls">
-        <div id="master-controls">
-          <select id="partner-selector"></select>
-          <button id="save-all-btn" onclick="APP.saveAllChanges()" class="btn-primary" style="display: none;">
-            💾 SAVE ALL CHANGES
-          </button>
-        </div>
-        <button onclick="APP.showAddModal()" id="add-merchant-btn" class="btn-primary">+ Add Merchant</button>
-        <button onclick="window.location.reload()" class="btn-outline" style="padding: 10px 20px; border-radius: 6px;">🔄</button>
-      </div>
-    </header>
-    
-    <div class="tabs">
-      <button class="tab active" data-tab="shipinsure-optin" onclick="APP.switchTab('shipinsure-optin')">
-        ShipInsure Pre-Opted In
-      </button>
-      <button class="tab" data-tab="partner-wishlist" onclick="APP.switchTab('partner-wishlist')">
-        <span id="partner-wishlist-label">Partner Wish List</span>
-      </button>
-      <button class="tab" data-tab="shipinsure-wishlist" onclick="APP.switchTab('shipinsure-wishlist')">
-        ShipInsure Wish List
-      </button>
+<div class="container">
+  <header>
+    <div class="logo-section">
+      <img id="partner-logo" alt="Partner Logo">
+      <img id="shipinsure-logo" src="https://drewshafe.github.io/partner-intros/shipinsure-logo-dark.png" alt="ShipInsure">
+      <span class="header-title" id="header-title">Partner Portal</span>
     </div>
-    
-    <div class="content">
-      <div class="tab-header">
-        <h2 id="tab-title">ShipInsure Pre-Opted In</h2>
-        <p id="tab-description">Merchants already opted in for partner introductions</p>
+    <div class="controls">
+      <div id="master-controls">
+        <select id="partner-selector"></select>
+        <button id="partner-settings-btn" class="btn-settings" onclick="APP.showPartnerSettingsModal()" style="display:none;">⚙️ Settings</button>
+        <button id="save-all-btn" onclick="APP.saveAllChanges()" class="btn-primary" style="display:none;">💾 SAVE ALL CHANGES</button>
       </div>
-      
-      <div class="filters">
-        <input type="text" id="search-input" placeholder="Search merchants..." oninput="APP.handleSearch(this.value)">
-        
-        <select id="lifecycle-filter" onchange="APP.applyFilters()">
-          <option value="All">All Stages</option>
-          <option value="In Deal Cycle">In Deal Cycle</option>
-          <option value="Churned">Churned</option>
-          <option value="Live ShipInsure Customer">Live ShipInsure Customer</option>
-          <option value="Live EcoCart Customer">Live EcoCart Customer</option>
+      <button onclick="APP.showAddModal()" id="add-merchant-btn" class="btn-primary">+ Add Merchant</button>
+      <button onclick="window.location.reload()" class="btn-outline" style="padding:10px 20px;border-radius:6px;">🔄</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="shipinsure-optin" onclick="APP.switchTab('shipinsure-optin')">
+      ShipInsure Pre-Opted In
+    </button>
+    <button class="tab" data-tab="partner-wishlist" onclick="APP.switchTab('partner-wishlist')">
+      <span id="partner-wishlist-label">Partner Wish List</span>
+    </button>
+    <button class="tab" data-tab="shipinsure-wishlist" onclick="APP.switchTab('shipinsure-wishlist')">
+      ShipInsure Wish List
+    </button>
+    <button class="tab master-only" data-tab="spiffs" onclick="APP.switchTab('spiffs')" style="display:none;">
+      💰 Spiffs
+    </button>
+  </div>
+
+  <!-- Main merchants content -->
+  <div class="content" id="main-content">
+    <div class="tab-header">
+      <h2 id="tab-title">ShipInsure Pre-Opted In</h2>
+      <p id="tab-description">Merchants opted in for partner introductions. Approving a merchant moves it to your Wish List.</p>
+    </div>
+    <div class="filters">
+      <input type="text" id="search-input" placeholder="Search merchants..." oninput="APP.handleSearch(this.value)">
+      <select id="lifecycle-filter" onchange="APP.applyFilters()">
+        <option value="All">All Stages</option>
+        <option value="In Deal Cycle">In Deal Cycle</option>
+        <option value="Churned">Churned</option>
+        <option value="Live ShipInsure Customer">Live ShipInsure Customer</option>
+        <option value="Live EcoCart Customer">Live EcoCart Customer</option>
+      </select>
+      <select id="ae-filter" onchange="APP.applyFilters()" class="master-only">
+        <option value="All">All AEs</option>
+      </select>
+    </div>
+    <div class="stats">
+      <div class="stat-item"><label>Total</label><span id="stat-total">0</span></div>
+      <div class="stat-item"><label>Approved</label><span id="stat-approved">0</span></div>
+      <div class="stat-item"><label>Asked</label><span id="stat-asked">0</span></div>
+      <div class="stat-item"><label>Yes Received</label><span id="stat-yes">0</span></div>
+      <div class="stat-item"><label>Emailed</label><span id="stat-emailed">0</span></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead id="table-head">
+          <tr>
+            <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
+            <th>Contact</th>
+            <th>Lifecycle</th>
+            <th class="master-only">SI AE</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="merchant-tbody">
+          <tr><td colspan="10" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Spiffs panel (shown when spiffs tab is active) -->
+  <div class="content" id="spiffs-panel" style="display:none;">
+    <div class="loading">Loading spiff data...</div>
+  </div>
+</div>
+
+<!-- ── MODALS ──────────────────────────────────────────────────────────────── -->
+
+<!-- Add Merchant -->
+<div id="add-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Add Merchant</h2>
+    <div class="form-group"><label>Merchant Name *</label><input type="text" id="new-name" placeholder="Acme Corp"></div>
+    <div class="form-group"><label>Website URL</label><input type="text" id="new-url" placeholder="https://acmecorp.com"></div>
+    <div class="form-group"><label>Contact Name</label><input type="text" id="new-contact-name" placeholder="John Smith"><small>Optional — can be added later</small></div>
+    <div class="form-group"><label>Contact Title</label><input type="text" id="new-contact-title" placeholder="CEO"></div>
+    <div class="form-group"><label>Contact Email</label><input type="email" id="new-contact-email" placeholder="john@acmecorp.com"></div>
+    <div class="form-group"><label>Lifecycle Stage</label>
+      <select id="new-lifecycle">
+        <option>In Deal Cycle</option><option>Churned</option>
+        <option>Live ShipInsure Customer</option><option>Live EcoCart Customer</option>
+      </select>
+    </div>
+    <div class="form-group"><label>SI AE Email</label><input type="email" id="new-ae" value="drew@shipinsure.io"></div>
+    <div class="form-group"><label>Notes</label><textarea id="new-notes" placeholder="Additional notes..."></textarea></div>
+    <div class="modal-actions">
+      <button onclick="APP.addMerchant()" class="btn-primary">Add Merchant</button>
+      <button onclick="APP.closeModal('add-modal')" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Merchant -->
+<div id="edit-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Edit Merchant</h2>
+    <div class="form-group"><label>Merchant Name *</label><input type="text" id="edit-name"></div>
+    <div class="form-group"><label>Website URL</label><input type="text" id="edit-url"></div>
+    <div class="form-group"><label>Contact Name</label><input type="text" id="edit-contact-name"><small>Optional — can be added later</small></div>
+    <div class="form-group"><label>Contact Title</label><input type="text" id="edit-contact-title"></div>
+    <div class="form-group"><label>Lifecycle Stage</label>
+      <select id="edit-lifecycle">
+        <option>In Deal Cycle</option><option>Churned</option>
+        <option>Live ShipInsure Customer</option><option>Live EcoCart Customer</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="edit-notes"></textarea></div>
+    <div class="modal-actions">
+      <button onclick="APP.saveEditMerchant()" class="btn-primary">Save Changes</button>
+      <button onclick="APP.closeModal('edit-modal')" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Email Preview -->
+<div id="email-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>📧 Email Preview</h2>
+    <div class="email-preview"><strong>Subject:</strong><div id="email-subject"></div></div>
+    <div class="email-preview"><strong>Body:</strong><div id="email-body"></div></div>
+    <div class="modal-actions">
+      <button onclick="APP.copyAndMarkSent()" class="btn-primary">Copy & Mark Sent</button>
+      <button onclick="APP.copyEmail()" class="btn-outline">Copy Only</button>
+      <button onclick="APP.closeModal('email-modal')" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Partner -->
+<div id="create-partner-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Create New Partner</h2>
+    <div class="form-group"><label>Partner Slug *</label><input type="text" id="new-partner-slug" placeholder="my-partner"><small>Used in URLs and passwords: my-partner2026</small></div>
+    <div class="form-group"><label>Partner Name *</label><input type="text" id="new-partner-name" placeholder="My Partner"></div>
+    <div class="form-group"><label>Logo URL (optional)</label><input type="text" id="new-partner-logo" placeholder="https://drewshafe.github.io/partner-intros/my-partner.png"></div>
+    <div class="modal-actions">
+      <button onclick="APP.createNewPartner()" class="btn-primary">Create Partner</button>
+      <button onclick="APP.closeModal('create-partner-modal')" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Partner Settings (master only) -->
+<div id="partner-settings-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>⚙️ Partner Settings — <span id="settings-partner-name"></span></h2>
+
+    <div class="toggle-row">
+      <div>
+        <label>Show Pre-Opted In List</label>
+        <small>Hide this tab for partners that don't participate in the gift card intro campaign</small>
+      </div>
+      <input type="checkbox" id="settings-show-optin" checked>
+    </div>
+
+    <div class="form-group" style="margin-top:20px;">
+      <label>Spiff Config (JSON)</label>
+      <textarea class="code" id="settings-spiff-config" placeholder='{
+  "per_intro_amount": 300,
+  "merchant_portion": 200,
+  "rep_portion": 100,
+  "trigger": "demo_met",
+  "gift_card_type": "Amazon",
+  "volume_bonuses": [
+    { "threshold": 7, "period": "2026-03", "bonus": 500 },
+    { "threshold": 10, "period": "2026-03", "bonus": 1000 }
+  ]
+}'></textarea>
+      <small>Leave blank if this partner has no active spiff program. Changes save immediately.</small>
+    </div>
+
+    <div class="modal-actions">
+      <button onclick="APP.savePartnerSettings()" class="btn-primary">Save Settings</button>
+      <button onclick="APP.closeModal('partner-settings-modal')" class="btn-outline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Spiff (master only) -->
+<div id="log-spiff-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>💰 Log AE Spiff</h2>
+
+    <div class="form-group"><label>Merchant Name *</label><input type="text" id="spiff-merchant-name" placeholder="Acme Corp"></div>
+
+    <div class="form-row">
+      <div class="form-group"><label>AE Name</label><input type="text" id="spiff-ae-name" placeholder="Clara Hayes"></div>
+      <div class="form-group"><label>AE Email</label><input type="email" id="spiff-ae-email" placeholder="clara@partner.com"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label>Trigger Event *</label>
+        <select id="spiff-trigger">
+          <option value="demo_met">Demo Met</option>
+          <option value="closed_won">Closed Won</option>
         </select>
-        
-        <select id="ae-filter" onchange="APP.applyFilters()" class="master-only">
-          <option value="All">All AEs</option>
+      </div>
+      <div class="form-group"><label>Spiff Type *</label>
+        <select id="spiff-type">
+          <option value="per_intro">Per Intro</option>
+          <option value="volume_bonus">Volume Bonus</option>
+          <option value="target_merchant">Target Merchant</option>
         </select>
       </div>
-      
-      <div class="stats">
-        <div class="stat-item">
-          <label>Total</label>
-          <span id="stat-total">0</span>
-        </div>
-        <div class="stat-item">
-          <label>Approved</label>
-          <span id="stat-approved">0</span>
-        </div>
-        <div class="stat-item">
-          <label>Asked</label>
-          <span id="stat-asked">0</span>
-        </div>
-        <div class="stat-item">
-          <label>Yes Received</label>
-          <span id="stat-yes">0</span>
-        </div>
-        <div class="stat-item">
-          <label>Emailed</label>
-          <span id="stat-emailed">0</span>
-        </div>
-      </div>
-      
-      <div style="overflow-x: auto;">
-        <table>
-          <thead id="table-head">
-            <tr>
-              <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
-              <th>Contact</th>
-              <th>Lifecycle</th>
-              <th class="master-only">SI AE</th>
-              <th>Shared Actions</th>
-            </tr>
-          </thead>
-          <tbody id="merchant-tbody">
-            <tr><td colspan="10" class="loading">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
     </div>
-  </div>
 
-  <!-- Add Merchant Modal -->
-  <div id="add-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h2>Add Merchant</h2>
-      
-      <div class="form-group">
-        <label>Merchant Name *</label>
-        <input type="text" id="new-name" placeholder="Acme Corp">
-      </div>
-      
-      <div class="form-group">
-        <label>Website URL</label>
-        <input type="text" id="new-url" placeholder="https://acmecorp.com">
-      </div>
-      
-      <div class="form-group">
-        <label>Contact Name</label>
-        <input type="text" id="new-contact-name" placeholder="John Smith">
-        <small>Optional - can be added later</small>
-      </div>
-      
-      <div class="form-group">
-        <label>Contact Title</label>
-        <input type="text" id="new-contact-title" placeholder="CEO">
-      </div>
-      
-      <div class="form-group">
-        <label>Contact Email</label>
-        <input type="email" id="new-contact-email" placeholder="john@acmecorp.com">
-      </div>
-      
-      <div class="form-group">
-        <label>Lifecycle Stage</label>
-        <select id="new-lifecycle">
-          <option>In Deal Cycle</option>
-          <option>Churned</option>
-          <option>Live ShipInsure Customer</option>
-          <option>Live EcoCart Customer</option>
+    <div class="form-row">
+      <div class="form-group"><label>Amount ($) *</label><input type="number" id="spiff-amount" placeholder="300" min="0" step="0.01"></div>
+      <div class="form-group"><label>Gift Card Type</label>
+        <select id="spiff-gift-card-type">
+          <option value="Amazon">Amazon</option>
+          <option value="Visa">Visa</option>
+          <option value="Tremendous">Tremendous</option>
+          <option value="Other">Other</option>
         </select>
       </div>
-      
-      <div class="form-group">
-        <label>SI AE Email</label>
-        <input type="email" id="new-ae" value="drew@shipinsure.io">
-      </div>
-      
-      <div class="form-group">
-        <label>Notes</label>
-        <textarea id="new-notes" placeholder="Additional notes..."></textarea>
-      </div>
-      
-      <div class="modal-actions">
-        <button onclick="APP.addMerchant()" class="btn-primary">Add Merchant</button>
-        <button onclick="APP.closeModal('add-modal')" class="btn-outline">Cancel</button>
-      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label>Gift Card Code</label><input type="text" id="spiff-gift-card-code" placeholder="Optional — for your records"></div>
+      <div class="form-group"><label>Date Sent</label><input type="date" id="spiff-sent-date"></div>
+    </div>
+
+    <div class="form-group"><label>Notes</label><textarea id="spiff-notes" placeholder="e.g. Passport March volume bonus — 7 qualified intros"></textarea></div>
+
+    <div class="modal-actions">
+      <button onclick="APP.logSpiff()" class="btn-primary">Log Spiff</button>
+      <button onclick="APP.closeModal('log-spiff-modal')" class="btn-outline">Cancel</button>
     </div>
   </div>
+</div>
 
-  <!-- Edit Merchant Modal -->
-  <div id="edit-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h2>Edit Merchant</h2>
-      
-      <div class="form-group">
-        <label>Merchant Name *</label>
-        <input type="text" id="edit-name" placeholder="Acme Corp">
-      </div>
-      
-      <div class="form-group">
-        <label>Website URL</label>
-        <input type="text" id="edit-url" placeholder="https://acmecorp.com">
-      </div>
-      
-      <div class="form-group">
-        <label>Contact Name</label>
-        <input type="text" id="edit-contact-name" placeholder="John Smith">
-        <small>Optional - can be added later</small>
-      </div>
-      
-      <div class="form-group">
-        <label>Contact Title</label>
-        <input type="text" id="edit-contact-title" placeholder="CEO">
-      </div>
-      
-      <div class="form-group">
-        <label>Lifecycle Stage</label>
-        <select id="edit-lifecycle">
-          <option>In Deal Cycle</option>
-          <option>Churned</option>
-          <option>Live ShipInsure Customer</option>
-          <option>Live EcoCart Customer</option>
-        </select>
-      </div>
-      
-      <div class="form-group">
-        <label>Notes</label>
-        <textarea id="edit-notes" placeholder="Additional notes..."></textarea>
-      </div>
-      
-      <div class="modal-actions">
-        <button onclick="APP.saveEditMerchant()" class="btn-primary">Save Changes</button>
-        <button onclick="APP.closeModal('edit-modal')" class="btn-outline">Cancel</button>
-      </div>
-    </div>
-  </div>
+<script src="db.js"></script>
+<script src="app.js"></script>
 
-  <!-- Email Modal -->
-  <div id="email-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h2>📧 Email Preview</h2>
-      
-      <div class="email-preview">
-        <strong>Subject:</strong>
-        <div id="email-subject"></div>
-      </div>
-      
-      <div class="email-preview">
-        <strong>Body:</strong>
-        <div id="email-body"></div>
-      </div>
-      
-      <div class="modal-actions">
-        <button onclick="APP.copyAndMarkSent()" class="btn-primary">Copy & Mark Sent</button>
-        <button onclick="APP.copyEmail()" class="btn-outline">Copy Only</button>
-        <button onclick="APP.closeModal('email-modal')" class="btn-outline">Cancel</button>
-      </div>
-    </div>
-  </div>
+<script>
+  // Update table headers dynamically based on active tab
+  document.addEventListener('DOMContentLoaded', () => {
+    const observer = new MutationObserver(updateTableHeaders);
+    const tabs = document.querySelector('.tabs');
+    if (tabs) observer.observe(tabs, { attributes: true, subtree: true });
 
-  <!-- Create Partner Modal -->
-  <div id="create-partner-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h2>Create New Partner</h2>
-      
-      <div class="form-group">
-        <label>Partner Slug (URL-friendly, e.g., "my-partner") *</label>
-        <input type="text" id="new-partner-slug" placeholder="my-partner">
-        <small>Used in URLs and passwords: my-partner2026</small>
-      </div>
-      
-      <div class="form-group">
-        <label>Partner Name *</label>
-        <input type="text" id="new-partner-name" placeholder="My Partner">
-      </div>
-      
-      <div class="form-group">
-        <label>Logo URL (optional)</label>
-        <input type="text" id="new-partner-logo" placeholder="https://drewshafe.github.io/partner-intros/my-partner.png">
-        <small>Leave blank to auto-generate from slug</small>
-      </div>
-      
-      <div class="modal-actions">
-        <button onclick="APP.createNewPartner()" class="btn-primary">Create Partner</button>
-        <button onclick="APP.closeModal('create-partner-modal')" class="btn-outline">Cancel</button>
-      </div>
-    </div>
-  </div>
+    function updateTableHeaders() {
+      const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+      const tableHead = document.getElementById('table-head');
+      const partnerName = window.APP?.STATE?.partnerConfig?.partner_name || 'Partner';
+      if (!tableHead || !activeTab || activeTab === 'spiffs') return;
 
-  <!-- Load DB and App -->
-  <script src="db.js"></script>
-  <script src="app.js"></script>
-  
-  <script>
-    // Update table headers based on active tab
-    document.addEventListener('DOMContentLoaded', () => {
-      const observer = new MutationObserver(() => {
-        updateTableHeaders();
-      });
-      
-      observer.observe(document.querySelector('.tabs'), {
-        attributes: true,
-        subtree: true
-      });
-      
-      function updateTableHeaders() {
-        const activeTab = document.querySelector('.tab.active')?.dataset.tab;
-        const tableHead = document.getElementById('table-head');
-        const partnerName = window.APP?.STATE?.partnerConfig?.partner_name || 'Partner';
-        
-        if (!tableHead || !activeTab) return;
-        
-        if (activeTab === 'shipinsure-optin') {
-          tableHead.innerHTML = `
-            <tr>
-              <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
-              <th>Contact</th>
-              <th>Lifecycle</th>
-              <th class="master-only">SI AE</th>
-              <th>Shared Actions</th>
-            </tr>
-          `;
-        } else if (activeTab === 'partner-wishlist') {
-          tableHead.innerHTML = `
-            <tr>
-              <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
-              <th>Contact</th>
-              <th>Lifecycle</th>
-              <th class="master-only">SI AE</th>
-              <th>Actions by SI</th>
-              <th>Actions by ${partnerName}</th>
-              <th>Notes</th>
-            </tr>
-          `;
-        } else if (activeTab === 'shipinsure-wishlist') {
-          tableHead.innerHTML = `
-            <tr>
-              <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
-              <th>Contact</th>
-              <th>${partnerName} Lifecycle</th>
-              <th>${partnerName} AE</th>
-              <th>Actions by ${partnerName}</th>
-              <th>Actions by SI</th>
-              <th>Notes</th>
-            </tr>
-          `;
-        }
+      if (activeTab === 'shipinsure-optin') {
+        tableHead.innerHTML = `
+          <tr>
+            <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
+            <th>Contact</th><th>Lifecycle</th>
+            <th class="master-only">SI AE</th>
+            <th>Actions</th>
+          </tr>`;
+      } else if (activeTab === 'partner-wishlist') {
+        tableHead.innerHTML = `
+          <tr>
+            <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
+            <th>Contact</th><th>Lifecycle</th>
+            <th class="master-only">SI AE</th>
+            <th>Actions by SI</th>
+            <th>Actions by ${partnerName}</th>
+            <th>Notes</th>
+          </tr>`;
+      } else if (activeTab === 'shipinsure-wishlist') {
+        tableHead.innerHTML = `
+          <tr>
+            <th onclick="APP.sortBy('name')">Merchant <span id="sort-name" class="sort-indicator"></span></th>
+            <th>Contact</th>
+            <th>${partnerName} Lifecycle</th>
+            <th>${partnerName} AE</th>
+            <th>Actions by ${partnerName}</th>
+            <th>Actions by SI</th>
+            <th>Notes</th>
+          </tr>`;
       }
-    });
-  </script>
+    }
+  });
+</script>
 </body>
 </html>
