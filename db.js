@@ -200,12 +200,14 @@ const DB = (function() {
 
   // ── AE SPIFFS ───────────────────────────────────────────────────────────────
 
-  async function getAESpiffs(partnerSlug) {
+  // direction: 'si_ae' | 'partner_rep' | null (all)
+  async function getAESpiffs(partnerSlug, direction = null) {
     let query = supabase
       .from('ae_spiffs')
       .select('*')
       .order('created_at', { ascending: false });
     if (partnerSlug) query = query.eq('partner_slug', partnerSlug);
+    if (direction) query = query.eq('spiff_direction', direction);
     const { data, error } = await query;
     if (error) { console.error('Error fetching spiffs:', error); return []; }
     return data || [];
