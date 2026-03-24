@@ -1,9 +1,21 @@
-// Partner Intros - app.js v2
-// Changes: optin claim/unclaim, per-partner disqualification, from_optin tagging,
-//          show_optin_list toggle, AE spiff tracking, partner settings modal
+// Partner Intros - app.js v3
+// Changes: dual spiff types (SI AE + Partner Rep), spiff banners docked per-tab,
+//          workflow timestamps (auto-set + manually editable), standard/bonus spiff configs,
+//          Qualified Leads by AE subsection, spiff_direction tracking
 
 (function() {
   'use strict';
+
+  // All workflow boolean fields that have a corresponding _at timestamp
+  const WORKFLOW_TIMESTAMP_FIELDS = new Set([
+    'si_contact_yes_at','si_intro_sent_at',
+    'partner_replied_at','partner_booked_at','partner_met_at',
+    'partner_sent_gift_at','partner_in_onboarding_at',
+    'partner_closed_won_at','partner_closed_lost_at',
+    'partner_contact_yes_at','partner_intro_sent_at',
+    'si_booked_at','si_met_at','si_sent_gift_at',
+    'si_in_onboarding_at','si_closed_won_at','si_closed_lost_at'
+  ]);
 
   const STATE = {
     currentTab: 'shipinsure-optin',
@@ -23,9 +35,11 @@
     pendingChanges: {},
     isCreatingNewPartner: false,
     newPartnerData: null,
-    spiffs: [],
+    siSpiffs: [],
+    partnerSpiffs: [],
     selectedSpiff: null,
-    emailPreviewMerchant: null
+    emailPreviewMerchant: null,
+    spiffAEFilter: 'all_time'
   };
 
   // ── INIT ────────────────────────────────────────────────────────────────────
@@ -145,14 +159,16 @@
           }
         }
 
-        // Show/hide spiffs tab based on whether spiff_config exists
+        // Spiffs tab: show in master mode always, or in partner mode if any spiff config exists
         const spiffTab = document.querySelector('[data-tab="spiffs"]');
         if (spiffTab) {
-          if (STATE.isMasterMode || config.spiff_config) {
-            spiffTab.style.display = '';
-          } else {
-            spiffTab.style.display = 'none';
-          }
+          const hasAnySpiff = config.spiff_config || config.bonus_spiff_config || config.partner_spiff_config;
+          spiffTab.style.display = (STATE.isMasterMode || hasAnySpiff) ? '' : 'none';
+        }
+
+        // Re-render spiff banner if we're already on a wishlist tab
+        if (STATE.currentTab === 'partner-wishlist' || STATE.currentTab === 'shipinsure-wishlist') {
+          renderSpiffBanner(STATE.currentTab);
         }
       }
     } catch (err) {
@@ -273,6 +289,12 @@
     document.getElementById('settings-show-optin').checked = config.show_optin_list !== false;
     document.getElementById('settings-spiff-config').value =
       config.spiff_config ? JSON.stringify(config.spiff_config, null, 2) : '';
+    document.getElementById('settings-bonus-spiff-config').value =
+      config.bonus_spiff_config ? JSON.stringify(config.bonus_spiff_config, null, 2) : '';
+    document.getElementById('settings-partner-spiff-config').value =
+      config.partner_spiff_config ? JSON.stringify(config.partner_spiff_config, null, 2) : '';
+    document.getElementById('settings-show-si-spiff').checked = config.show_si_spiff === true;
+    document.getElementById('settings-show-partner-spiff').checked = config.show_partner_spiff === true;
 
     document.getElementById('partner-settings-modal').style.display = 'flex';
   }
@@ -282,30 +304,45 @@
     if (!slug) return;
 
     const showOptinList = document.getElementById('settings-show-optin').checked;
-    const rawJson = document.getElementById('settings-spiff-config').value.trim();
+    const showSiSpiff = document.getElementById('settings-show-si-spiff').checked;
+    const showPartnerSpiff = document.getElementById('settings-show-partner-spiff').checked;
 
-    let spiffConfig = null;
-    if (rawJson) {
-      try {
-        spiffConfig = JSON.parse(rawJson);
-      } catch (e) {
-        alert('Invalid JSON in spiff config. Please fix before saving.');
-        return;
-      }
+    function parseJsonField(id, label) {
+      const raw = document.getElementById(id).value.trim();
+      if (!raw) return { ok: true, value: null };
+      try { return { ok: true, value: JSON.parse(raw) }; }
+      catch (e) { return { ok: false, label }; }
     }
 
+    const stdResult    = parseJsonField('settings-spiff-config', 'Standard Spiff Config');
+    const bonusResult  = parseJsonField('settings-bonus-spiff-config', 'Bonus Spiff Config');
+    const partnerResult = parseJsonField('settings-partner-spiff-config', 'Partner Rep Spiff Config');
+
+    for (const r of [stdResult, bonusResult, partnerResult]) {
+      if (!r.ok) { alert(`Invalid JSON in ${r.label}. Please fix before saving.`); return; }
+    }
+
+    const updates = {
+      show_optin_list: showOptinList,
+      spiff_config: stdResult.value,
+      bonus_spiff_config: bonusResult.value,
+      partner_spiff_config: partnerResult.value,
+      show_si_spiff: showSiSpiff,
+      show_partner_spiff: showPartnerSpiff
+    };
+
     try {
-      await DB.updatePartnerConfig(slug, { show_optin_list: showOptinList, spiff_config: spiffConfig });
-      STATE.partnerConfig.show_optin_list = showOptinList;
-      STATE.partnerConfig.spiff_config = spiffConfig;
+      await DB.updatePartnerConfig(slug, updates);
+      Object.assign(STATE.partnerConfig, updates);
 
       // Update tab visibility live
       const optinTab = document.querySelector('[data-tab="shipinsure-optin"]');
       if (optinTab) optinTab.style.display = showOptinList ? '' : 'none';
       if (!showOptinList && STATE.currentTab === 'shipinsure-optin') switchTab('partner-wishlist');
 
+      const hasAnySpiff = stdResult.value || bonusResult.value || partnerResult.value;
       const spiffTab = document.querySelector('[data-tab="spiffs"]');
-      if (spiffTab) spiffTab.style.display = (STATE.isMasterMode || spiffConfig) ? '' : 'none';
+      if (spiffTab) spiffTab.style.display = (STATE.isMasterMode || hasAnySpiff) ? '' : 'none';
 
       closeModal('partner-settings-modal');
       alert('✅ Partner settings saved.');
@@ -576,11 +613,25 @@
         ${fields.map(field => {
           const active = merchant[field] || false;
           const pending = hasPendingChange(merchant.id, field);
+          const atField = field + '_at';
+          const tsRaw = hasPendingChange(merchant.id, atField)
+            ? STATE.pendingChanges[merchant.id][atField]
+            : merchant[atField];
+          const dateVal = tsRaw ? tsRaw.substring(0, 10) : '';
           return `
-            <div class="workflow-step ${active ? 'active' : ''}"
-                 style="cursor:pointer;${pending ? 'background:#fff9c4;' : ''}"
-                 onclick="APP.toggleWorkflowStep('${merchant.id}', '${field}')">
-              ${active ? '✓' : '○'} ${labels[field]}
+            <div style="margin-bottom:2px;">
+              <div class="workflow-step ${active ? 'active' : ''}"
+                   style="cursor:pointer;${pending ? 'background:#fff9c4;' : ''}"
+                   onclick="APP.toggleWorkflowStep('${merchant.id}', '${field}')">
+                ${active ? '✓' : '○'} ${labels[field]}
+              </div>
+              ${active ? `
+                <input type="date" value="${dateVal}"
+                  title="Click to edit date"
+                  onchange="APP.updateWorkflowTimestamp('${merchant.id}', '${atField}', this.value)"
+                  style="font-size:10px;color:#7f8c8d;border:none;background:transparent;
+                         width:96px;cursor:pointer;padding:0 4px;display:block;margin-top:1px;">
+              ` : ''}
             </div>`;
         }).join('')}
       </div>`;
@@ -741,6 +792,9 @@
     if (spiffsPanel) spiffsPanel.style.display = 'none';
     if (mainContent) mainContent.style.display = 'block';
 
+    // Render spiff banner docked above the list for wish list tabs
+    renderSpiffBanner(tab);
+
     const partnerName = STATE.partnerConfig.partner_name || 'Partner';
     const titles = {
       'shipinsure-optin': 'ShipInsure Pre-Opted In',
@@ -831,7 +885,19 @@
   function toggleWorkflowStep(id, field) {
     const merchant = STATE.merchants.find(m => m.id === id);
     if (!merchant) return;
-    trackPendingChange(id, field, !merchant[field]);
+    const newValue = !merchant[field];
+    trackPendingChange(id, field, newValue);
+    // Auto-set or clear the corresponding timestamp
+    const atField = field + '_at';
+    if (WORKFLOW_TIMESTAMP_FIELDS.has(atField)) {
+      trackPendingChange(id, atField, newValue ? new Date().toISOString() : null);
+    }
+  }
+
+  // Called when user manually edits a workflow timestamp inline
+  function updateWorkflowTimestamp(id, atField, dateValue) {
+    const isoValue = dateValue ? new Date(dateValue + 'T12:00:00').toISOString() : null;
+    trackPendingChange(id, atField, isoValue);
   }
 
   // ── ADD / EDIT MERCHANT ──────────────────────────────────────────────────────
@@ -968,7 +1034,12 @@
   async function loadSpiffs() {
     const slug = STATE.partnerConfig.partner_slug;
     try {
-      STATE.spiffs = await DB.getAESpiffs(slug || null);
+      const [si, partner] = await Promise.all([
+        DB.getAESpiffs(slug || null, 'si_ae'),
+        DB.getAESpiffs(slug || null, 'partner_rep')
+      ]);
+      STATE.siSpiffs = si;
+      STATE.partnerSpiffs = partner;
       renderSpiffs();
     } catch (err) {
       console.error('Error loading spiffs:', err);
@@ -979,89 +1050,215 @@
     const panel = document.getElementById('spiffs-panel');
     if (!panel) return;
 
-    const config = STATE.partnerConfig.spiff_config || null;
+    const stdConfig = STATE.partnerConfig.spiff_config || null;
+    const bonusConfig = STATE.partnerConfig.bonus_spiff_config || null;
+    const partnerRepConfig = STATE.partnerConfig.partner_spiff_config || null;
     const partnerName = STATE.partnerConfig.partner_name || 'Partner';
-    const spiffs = STATE.spiffs;
+    const siSpiffs = STATE.siSpiffs || [];
+    const partnerSpiffs = STATE.partnerSpiffs || [];
 
     panel.innerHTML = `
       <div style="margin-bottom:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div>
-            <h2 style="font-size:20px;margin-bottom:4px;">💰 AE Spiff Tracker — ${partnerName}</h2>
-            <p style="color:#7f8c8d;font-size:14px;">Log gift card / spiff payouts sent to AEs after qualified demos or closed deals</p>
+
+        <!-- ── SI AE Spiff Tracker ── -->
+        <div style="margin-bottom:32px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <h2 style="font-size:20px;margin-bottom:4px;">💰 SI AE Spiff Tracker — ${partnerName}</h2>
+              <p style="color:#7f8c8d;font-size:14px;">Incentivizes SI AEs to make intros to ${partnerName}</p>
+            </div>
+            ${STATE.isMasterMode ? `<button class="btn-primary" onclick="APP.showLogSpiffModal('si_ae')">+ Log SI AE Spiff</button>` : ''}
           </div>
-          ${STATE.isMasterMode ? `<button class="btn-primary" onclick="APP.showLogSpiffModal()">+ Log Spiff</button>` : ''}
+
+          ${stdConfig ? `
+            <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;color:#2c3e50;">Standard Spiff Terms</h3>
+              ${renderSpiffConfigSummary(stdConfig, false)}
+            </div>
+          ` : STATE.isMasterMode ? `
+            <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;color:#856404;">
+              No standard spiff config set. Use ⚙️ Partner Settings → Standard Spiff Config.
+            </div>
+          ` : ''}
+
+          ${bonusConfig ? `
+            <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;color:#2c3e50;">March Volume Bonuses</h3>
+              ${renderSpiffConfigSummary(bonusConfig, true)}
+              ${renderVolumeBonusProgress(bonusConfig, siSpiffs)}
+            </div>
+          ` : ''}
+
+          <!-- Qualified Leads by AE -->
+          <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="font-size:14px;font-weight:600;color:#2c3e50;">Qualified Leads by AE</h3>
+              <select id="spiff-ae-date-filter" onchange="APP.setSpiffAEFilter(this.value)"
+                style="font-size:12px;padding:4px 8px;border:1px solid #dee2e6;border-radius:4px;">
+                <option value="week" ${STATE.spiffAEFilter==='week'?'selected':''}>This Week</option>
+                <option value="month" ${STATE.spiffAEFilter==='month'?'selected':''}>This Month</option>
+                <option value="quarter" ${STATE.spiffAEFilter==='quarter'?'selected':''}>This Quarter</option>
+                <option value="year" ${STATE.spiffAEFilter==='year'?'selected':''}>This Year</option>
+                <option value="all_time" ${STATE.spiffAEFilter==='all_time'?'selected':''}>All Time</option>
+              </select>
+            </div>
+            ${renderQualifiedLeadsByAE(siSpiffs)}
+          </div>
+
+          <!-- SI AE Spiff Log -->
+          <div style="background:#fff;border-radius:8px;border:1px solid #e0e0e0;overflow:hidden;">
+            <div style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
+              <strong style="font-size:13px;">SI AE Spiff Log</strong>
+              <span style="font-size:12px;color:#7f8c8d;">${siSpiffs.length} total · $${siSpiffs.reduce((s,x) => s + Number(x.spiff_amount||0), 0).toLocaleString()} paid out</span>
+            </div>
+            ${renderSpiffTable(siSpiffs)}
+          </div>
         </div>
 
-        ${config ? `
-          <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:20px;">
-            <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;color:#2c3e50;">Current Offer Terms</h3>
-            ${renderSpiffConfigSummary(config)}
-            ${renderVolumeBonusProgress(config, spiffs)}
+        <!-- ── Partner Rep Spiff Tracker ── -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <h2 style="font-size:20px;margin-bottom:4px;">🤝 Partner Rep Spiff Tracker — ${partnerName}</h2>
+              <p style="color:#7f8c8d;font-size:14px;">Incentivizes ${partnerName} reps to introduce ShipInsure merchants</p>
+            </div>
+            ${STATE.isMasterMode ? `<button class="btn-primary" onclick="APP.showLogSpiffModal('partner_rep')">+ Log Partner Rep Spiff</button>` : ''}
           </div>
-        ` : STATE.isMasterMode ? `
-          <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;margin-bottom:20px;font-size:13px;color:#856404;">
-            No spiff program configured for this partner. Use ⚙️ Partner Settings to add one.
-          </div>
-        ` : ''}
 
-        <div style="background:#fff;border-radius:8px;border:1px solid #e0e0e0;overflow:hidden;">
-          <div style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
-            <strong style="font-size:13px;">Spiff Log</strong>
-            <span style="font-size:12px;color:#7f8c8d;">${spiffs.length} total · $${spiffs.reduce((s,x) => s + Number(x.spiff_amount||0), 0).toLocaleString()} paid out</span>
+          ${partnerRepConfig ? `
+            <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;color:#2c3e50;">Partner Rep Spiff Terms</h3>
+              ${renderSpiffConfigSummary(partnerRepConfig, false)}
+            </div>
+          ` : STATE.isMasterMode ? `
+            <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;color:#856404;">
+              No partner rep spiff config set. Use ⚙️ Partner Settings → Partner Rep Spiff Config.
+            </div>
+          ` : ''}
+
+          <div style="background:#fff;border-radius:8px;border:1px solid #e0e0e0;overflow:hidden;">
+            <div style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
+              <strong style="font-size:13px;">Partner Rep Spiff Log</strong>
+              <span style="font-size:12px;color:#7f8c8d;">${partnerSpiffs.length} total · $${partnerSpiffs.reduce((s,x) => s + Number(x.spiff_amount||0), 0).toLocaleString()} paid out</span>
+            </div>
+            ${renderSpiffTable(partnerSpiffs)}
           </div>
-          ${spiffs.length === 0
-            ? '<div style="padding:32px;text-align:center;color:#7f8c8d;font-size:13px;">No spiffs logged yet</div>'
-            : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead style="background:#f8f9fa;">
-                  <tr>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Merchant</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">AE</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Trigger</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Type</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Amount</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Gift Card</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Sent</th>
-                    <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Notes</th>
-                    ${STATE.isMasterMode ? '<th style="padding:10px 12px;border-bottom:1px solid #dee2e6;"></th>' : ''}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${spiffs.map(s => `
-                    <tr style="border-bottom:1px solid #f0f0f0;">
-                      <td style="padding:10px 12px;font-weight:500;">${s.merchant_name}</td>
-                      <td style="padding:10px 12px;">
-                        <div>${s.ae_name || '-'}</div>
-                        <div style="font-size:11px;color:#7f8c8d;">${s.ae_email || ''}</div>
-                      </td>
-                      <td style="padding:10px 12px;">
-                        <span class="badge badge-${s.trigger_event === 'demo_met' ? 'info' : 'success'}">
-                          ${s.trigger_event === 'demo_met' ? 'Demo Met' : 'Closed Won'}
-                        </span>
-                      </td>
-                      <td style="padding:10px 12px;">
-                        <span class="badge badge-secondary" style="font-size:10px;">
-                          ${s.spiff_type === 'per_intro' ? 'Per Intro' : s.spiff_type === 'volume_bonus' ? 'Volume Bonus' : 'Target Merchant'}
-                        </span>
-                      </td>
-                      <td style="padding:10px 12px;font-weight:600;color:#28a745;">$${Number(s.spiff_amount).toLocaleString()}</td>
-                      <td style="padding:10px 12px;">
-                        ${s.gift_card_type || '-'}
-                        ${s.gift_card_code ? `<div style="font-size:10px;color:#7f8c8d;font-family:monospace;">${s.gift_card_code}</div>` : ''}
-                      </td>
-                      <td style="padding:10px 12px;">${s.sent_date || '-'}</td>
-                      <td style="padding:10px 12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.notes||''}">${s.notes || '-'}</td>
-                      ${STATE.isMasterMode ? `<td style="padding:10px 12px;"><button class="btn-small btn-outline" style="color:#dc3545;font-size:11px;" onclick="APP.deleteSpiff('${s.id}')">✕</button></td>` : ''}
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>`
-          }
         </div>
+
       </div>`;
   }
 
-  function renderSpiffConfigSummary(config) {
+  function renderSpiffTable(spiffs) {
+    if (spiffs.length === 0) {
+      return '<div style="padding:32px;text-align:center;color:#7f8c8d;font-size:13px;">No spiffs logged yet</div>';
+    }
+    return `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead style="background:#f8f9fa;">
+        <tr>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Merchant</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Rep / AE</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Trigger</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Type</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Amount</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Gift Card</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Sent</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:1px solid #dee2e6;">Notes</th>
+          ${STATE.isMasterMode ? '<th style="padding:10px 12px;border-bottom:1px solid #dee2e6;"></th>' : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${spiffs.map(s => `
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 12px;font-weight:500;">${s.merchant_name}</td>
+            <td style="padding:10px 12px;">
+              <div>${s.ae_name || '-'}</div>
+              <div style="font-size:11px;color:#7f8c8d;">${s.ae_email || ''}</div>
+            </td>
+            <td style="padding:10px 12px;">
+              <span class="badge badge-${s.trigger_event === 'demo_met' ? 'info' : 'success'}">
+                ${s.trigger_event === 'demo_met' ? 'Demo Met' : 'Closed Won'}
+              </span>
+            </td>
+            <td style="padding:10px 12px;">
+              <span class="badge badge-secondary" style="font-size:10px;">
+                ${s.spiff_type === 'per_intro' ? 'Per Intro' : s.spiff_type === 'volume_bonus' ? 'Volume Bonus' : 'Target Merchant'}
+              </span>
+            </td>
+            <td style="padding:10px 12px;font-weight:600;color:#28a745;">$${Number(s.spiff_amount).toLocaleString()}</td>
+            <td style="padding:10px 12px;">
+              ${s.gift_card_type || '-'}
+              ${s.gift_card_code ? `<div style="font-size:10px;color:#7f8c8d;font-family:monospace;">${s.gift_card_code}</div>` : ''}
+            </td>
+            <td style="padding:10px 12px;">${s.sent_date || '-'}</td>
+            <td style="padding:10px 12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.notes||''}">${s.notes || '-'}</td>
+            ${STATE.isMasterMode ? `<td style="padding:10px 12px;"><button class="btn-small btn-outline" style="color:#dc3545;font-size:11px;" onclick="APP.deleteSpiff('${s.id}')">✕</button></td>` : ''}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function renderQualifiedLeadsByAE(siSpiffs) {
+    const filter = STATE.spiffAEFilter || 'all_time';
+    const now = new Date();
+
+    function inRange(dateStr) {
+      if (!dateStr || filter === 'all_time') return true;
+      const d = new Date(dateStr);
+      if (filter === 'week') {
+        const start = new Date(now); start.setDate(now.getDate() - now.getDay());
+        return d >= start;
+      }
+      if (filter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (filter === 'quarter') {
+        const q = Math.floor(now.getMonth() / 3);
+        return Math.floor(d.getMonth() / 3) === q && d.getFullYear() === now.getFullYear();
+      }
+      if (filter === 'year') return d.getFullYear() === now.getFullYear();
+      return true;
+    }
+
+    const filtered = siSpiffs.filter(s => inRange(s.sent_date));
+
+    if (filtered.length === 0) {
+      return '<div style="font-size:13px;color:#7f8c8d;">No qualified leads in this period.</div>';
+    }
+
+    const byAE = {};
+    filtered.forEach(s => {
+      const key = s.ae_name || s.ae_email || 'Unknown';
+      if (!byAE[key]) byAE[key] = { count: 0, amount: 0 };
+      byAE[key].count++;
+      byAE[key].amount += Number(s.spiff_amount || 0);
+    });
+
+    const rows = Object.entries(byAE).sort((a,b) => b[1].count - a[1].count);
+    return `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#f8f9fa;">
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #dee2e6;">AE</th>
+          <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #dee2e6;">Qualified Leads</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #dee2e6;">Total Paid</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(([ae, data]) => `
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:8px 10px;font-weight:500;">${ae}</td>
+            <td style="padding:8px 10px;text-align:center;"><span class="badge badge-info">${data.count}</span></td>
+            <td style="padding:8px 10px;text-align:right;color:#28a745;font-weight:600;">$${data.amount.toLocaleString()}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function setSpiffAEFilter(value) {
+    STATE.spiffAEFilter = value;
+    renderSpiffs();
+  }
+
+  function renderSpiffConfigSummary(config, isBonus) {
     if (!config) return '<p style="color:#7f8c8d;font-size:13px;">No program configured.</p>';
     let html = '<div style="font-size:13px;">';
 
@@ -1090,7 +1287,8 @@
     }
 
     if (config.volume_bonuses && config.volume_bonuses.length) {
-      html += `<div style="margin-bottom:4px;"><strong>Volume Bonuses:</strong></div>`;
+      const label = isBonus ? 'March Volume Bonuses:' : 'Volume Bonuses:';
+      html += `<div style="margin-bottom:4px;"><strong>${label}</strong></div>`;
       config.volume_bonuses.forEach(b => {
         html += `<div style="margin-left:12px;margin-bottom:4px;color:#495057;">• ${b.threshold} intros in ${b.period} → +$${b.bonus} bonus (stacks)</div>`;
       });
@@ -1125,20 +1323,30 @@
     return html;
   }
 
-  function showLogSpiffModal() {
+  function showLogSpiffModal(direction) {
     if (!STATE.isMasterMode) return;
-    const config = STATE.partnerConfig.spiff_config;
+    direction = direction || 'si_ae';
 
+    // Pick the relevant config to pre-populate amount/gift card type
+    const config = direction === 'partner_rep'
+      ? STATE.partnerConfig.partner_spiff_config
+      : STATE.partnerConfig.spiff_config;
+
+    document.getElementById('spiff-direction').value = direction;
     document.getElementById('spiff-merchant-name').value = '';
     document.getElementById('spiff-ae-name').value = '';
     document.getElementById('spiff-ae-email').value = '';
-    document.getElementById('spiff-trigger').value = 'demo_met';
+    document.getElementById('spiff-trigger').value = config ? (config.trigger || 'demo_met') : 'demo_met';
     document.getElementById('spiff-type').value = 'per_intro';
     document.getElementById('spiff-amount').value = config ? (config.per_intro_amount || '') : '';
     document.getElementById('spiff-gift-card-type').value = config ? (config.gift_card_type || 'Amazon') : 'Amazon';
     document.getElementById('spiff-gift-card-code').value = '';
     document.getElementById('spiff-sent-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('spiff-notes').value = '';
+
+    // Update modal title to reflect direction
+    const titleEl = document.getElementById('log-spiff-modal-title');
+    if (titleEl) titleEl.textContent = direction === 'partner_rep' ? 'Log Partner Rep Spiff' : 'Log SI AE Spiff';
 
     document.getElementById('log-spiff-modal').style.display = 'flex';
   }
@@ -1165,6 +1373,7 @@
       gift_card_code: document.getElementById('spiff-gift-card-code').value.trim() || null,
       sent_date: document.getElementById('spiff-sent-date').value || null,
       notes: document.getElementById('spiff-notes').value.trim() || null,
+      spiff_direction: document.getElementById('spiff-direction').value || 'si_ae',
       created_by: 'drew@shipinsure.io'
     };
 
@@ -1188,6 +1397,62 @@
       console.error('Error deleting spiff:', err);
       alert('Failed to delete spiff: ' + err.message);
     }
+  }
+
+  // ── SPIFF BANNER ─────────────────────────────────────────────────────────────
+
+  function renderSpiffBanner(tab) {
+    const banner = document.getElementById('spiff-banner');
+    if (!banner) return;
+
+    const config = STATE.partnerConfig;
+    let html = '';
+
+    if (tab === 'partner-wishlist' && config.show_si_spiff && config.spiff_config) {
+      const c = config.spiff_config;
+      const partnerName = config.partner_name || 'Partner';
+      const bonusConfig = config.bonus_spiff_config;
+      html = `
+        <div style="background:linear-gradient(135deg,#fff9e6,#fffde7);border:1px solid #ffe082;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">💰</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#856404;">SI AE Spiff Active — ${partnerName}</div>
+              <div style="font-size:12px;color:#6d4c1a;margin-top:2px;">
+                ${c.per_intro_amount ? `$${c.per_intro_amount} per qualified intro` : ''}
+                ${c.trigger ? ` · Trigger: ${c.trigger === 'demo_met' ? 'Demo Met' : 'Closed Won'}` : ''}
+                ${c.gift_card_type ? ` · ${c.gift_card_type}` : ''}
+                ${c.expiry ? ` · Expires: ${c.expiry}` : ''}
+                ${bonusConfig && bonusConfig.volume_bonuses ? ` · March volume bonuses active` : ''}
+              </div>
+            </div>
+          </div>
+          ${STATE.isMasterMode ? `<button class="btn-small btn-primary" onclick="APP.showLogSpiffModal('si_ae')" style="white-space:nowrap;">+ Log Spiff</button>` : ''}
+        </div>`;
+    } else if (tab === 'shipinsure-wishlist' && config.show_partner_spiff && config.partner_spiff_config) {
+      const c = config.partner_spiff_config;
+      const partnerName = config.partner_name || 'Partner';
+      html = `
+        <div style="background:linear-gradient(135deg,#e8f5e9,#f1f8e9);border:1px solid #a5d6a7;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">🤝</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#2e7d32;">Partner Rep Spiff Active — ${partnerName}</div>
+              <div style="font-size:12px;color:#1b5e20;margin-top:2px;">
+                ${c.per_intro_amount ? `$${c.per_intro_amount} per qualified intro` : ''}
+                ${c.trigger ? ` · Trigger: ${c.trigger === 'demo_met' ? 'Demo Met' : 'Closed Won'}` : ''}
+                ${c.gift_card_type ? ` · ${c.gift_card_type}` : ''}
+                ${c.expiry ? ` · Expires: ${c.expiry}` : ''}
+                ${c.target_merchants && c.target_merchants.length ? ` · Targets: ${c.target_merchants.join(', ')}` : ''}
+              </div>
+            </div>
+          </div>
+          ${STATE.isMasterMode ? `<button class="btn-small btn-primary" onclick="APP.showLogSpiffModal('partner_rep')" style="white-space:nowrap;">+ Log Spiff</button>` : ''}
+        </div>`;
+    }
+
+    banner.innerHTML = html;
+    banner.style.display = html ? 'block' : 'none';
   }
 
   // ── MODAL UTILS ──────────────────────────────────────────────────────────────
@@ -1224,6 +1489,8 @@
     showLogSpiffModal,
     logSpiff,
     deleteSpiff,
+    updateWorkflowTimestamp,
+    setSpiffAEFilter,
     STATE
   };
 
