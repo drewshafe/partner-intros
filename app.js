@@ -739,19 +739,35 @@
   async function deleteMerchant(id) {
     const merchant = STATE.merchants.find(m => m.id === id);
     if (!merchant) return;
-    if (!confirm(`Delete "${merchant.name}"? This cannot be undone.`)) return;
+
+    const isWishListEntry = merchant.source_tab === 'partner-wishlist';
 
     try {
-      // If this wish-list entry came from Pre-Opted In, restore the original to the pool
-      if (merchant.from_optin && merchant.origin_merchant_id) {
+      if (isWishListEntry && merchant.from_optin && merchant.origin_merchant_id) {
+        // New-pattern copy: delete the wish list copy + restore original to Pre-Opted In pool
+        if (!confirm(`Remove "${merchant.name}" from wish list? This will return it to the Pre-Opted In pool.`)) return;
         await DB.unclaimMerchant(merchant.origin_merchant_id);
+        await DB.deleteMerchant(id);
+        alert('✅ Removed — merchant returned to Pre-Opted In pool.');
+
+      } else if (isWishListEntry && !merchant.from_optin) {
+        // Old-pattern or direct-add: the record IS the original — don't delete it,
+        // just move it back to shipinsure-optin so it's preserved
+        if (!confirm(`Remove "${merchant.name}" from wish list? It will be returned to the Pre-Opted In pool.`)) return;
+        await DB.restoreMerchantToOptinPool(id);
+        alert('✅ Removed — merchant returned to Pre-Opted In pool.');
+
+      } else {
+        // Not a wish list entry (optin tab, SI wishlist, etc.) — standard delete
+        if (!confirm(`Delete "${merchant.name}"? This cannot be undone.`)) return;
+        await DB.deleteMerchant(id);
+        alert('✅ Merchant deleted.');
       }
-      await DB.deleteMerchant(id);
-      alert('✅ Merchant deleted');
+
       await loadMerchants();
     } catch (err) {
       console.error('Error deleting merchant:', err);
-      alert('Failed to delete: ' + err.message);
+      alert('Failed to remove: ' + err.message);
     }
   }
 
